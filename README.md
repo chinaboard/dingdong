@@ -52,7 +52,7 @@ The version baked into the firmware comes from `git describe --tags
 --dirty --always` at build time, so off-tag dev builds get a
 self-describing string like `0.5.5-3-gabc1234-dirty`.
 
-## Project layout
+## License
 
-See [`CLAUDE.md`](./CLAUDE.md) for the full architecture and component
-breakdown.
+MIT — see [LICENSE](./LICENSE). Built on top of ESP-IDF (Apache 2.0); the
+firmware binary embeds compiled IDF code under those terms.
