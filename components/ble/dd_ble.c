@@ -6,7 +6,6 @@
 
 #include "esp_log.h"
 #include "esp_mac.h"
-#include "esp_random.h"
 #include "esp_timer.h"
 
 #include "nimble/nimble_port.h"
@@ -69,8 +68,6 @@ static uint16_t s_pairing_numcmp_handle = 0xFFFF;  // conn awaiting Web UI confi
 // Filter policy: when true, only whitelisted (bonded) peers can connect; when
 // false, anyone can connect (used during pairing window or when no bonds exist).
 static bool     s_filter_strict = false;
-
-#define STATUS(fmt, ...) ESP_LOGI(TAG, fmt, ##__VA_ARGS__)
 
 static int gap_event_cb(struct ble_gap_event *event, void *arg);
 
@@ -297,9 +294,9 @@ static int register_hid_service(void)
 
     int rc = ble_svc_hid_add(hp);
     if (rc != 0) {
-        STATUS("ble_svc_hid_add rc=%d", rc);
+        ESP_LOGI(TAG, "ble_svc_hid_add rc=%d", rc);
     } else {
-        STATUS("HID service registered (boot keyboard)");
+        ESP_LOGI(TAG, "HID service registered (boot keyboard)");
     }
     return rc;
 }
@@ -357,7 +354,7 @@ static void start_advertising(void)
     uint8_t buf_sz;
     int rc = ble_hs_adv_set_fields(&fields, buf, &buf_sz, sizeof(buf));
     if (rc != 0) {
-        STATUS("adv_set_fields rc=%d", rc);
+        ESP_LOGI(TAG, "adv_set_fields rc=%d", rc);
         return;
     }
 
@@ -382,34 +379,34 @@ static void start_advertising(void)
     rc = ble_gap_ext_adv_configure(HID_ADV_INSTANCE, &params, NULL,
                                    gap_event_cb, NULL);
     if (rc != 0) {
-        STATUS("ext_adv_configure rc=%d", rc);
+        ESP_LOGI(TAG, "ext_adv_configure rc=%d", rc);
         return;
     }
 
     struct os_mbuf *data = os_msys_get_pkthdr(buf_sz, 0);
     if (!data) {
-        STATUS("os_msys_get_pkthdr failed");
+        ESP_LOGI(TAG, "os_msys_get_pkthdr failed");
         return;
     }
     rc = os_mbuf_append(data, buf, buf_sz);
     if (rc != 0) {
         os_mbuf_free_chain(data);
-        STATUS("os_mbuf_append rc=%d", rc);
+        ESP_LOGI(TAG, "os_mbuf_append rc=%d", rc);
         return;
     }
     rc = ble_gap_ext_adv_set_data(HID_ADV_INSTANCE, data);
     if (rc != 0) {
-        STATUS("ext_adv_set_data rc=%d", rc);
+        ESP_LOGI(TAG, "ext_adv_set_data rc=%d", rc);
         return;
     }
 
     rc = ble_gap_ext_adv_start(HID_ADV_INSTANCE, 0, 0);
     if (rc != 0) {
-        STATUS("ext_adv_start rc=%d", rc);
+        ESP_LOGI(TAG, "ext_adv_start rc=%d", rc);
         return;
     }
     s_advertising = true;
-    STATUS("advertising '%s' (HID, %s)", s_device_name,
+    ESP_LOGI(TAG, "advertising '%s' (HID, %s)", s_device_name,
            s_filter_strict ? "whitelist only" : "open");
 }
 
@@ -543,15 +540,15 @@ static void on_reset(int reason)
 
 static void on_sync(void)
 {
-    STATUS("on_sync entered");
+    ESP_LOGI(TAG, "on_sync entered");
     int rc = ble_hs_util_ensure_addr(0);
     if (rc != 0) {
-        STATUS("ensure_addr rc=%d", rc);
+        ESP_LOGI(TAG, "ensure_addr rc=%d", rc);
         return;
     }
     rc = ble_hs_id_infer_auto(0, &s_own_addr_type);
     if (rc != 0) {
-        STATUS("id_infer_auto rc=%d", rc);
+        ESP_LOGI(TAG, "id_infer_auto rc=%d", rc);
         return;
     }
 
@@ -591,10 +588,10 @@ esp_err_t dd_ble_start(void)
         }
     }
 
-    STATUS("nimble_port_init...");
+    ESP_LOGI(TAG, "nimble_port_init...");
     esp_err_t err = nimble_port_init();
     if (err != ESP_OK) {
-        STATUS("nimble_port_init=%s", esp_err_to_name(err));
+        ESP_LOGI(TAG, "nimble_port_init=%s", esp_err_to_name(err));
         return err;
     }
 
@@ -610,30 +607,30 @@ esp_err_t dd_ble_start(void)
     ble_hs_cfg.sm_our_key_dist  = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
     ble_hs_cfg.sm_their_key_dist= BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
 
-    STATUS("ble_svc_gap_init");
+    ESP_LOGI(TAG, "ble_svc_gap_init");
     ble_svc_gap_init();
-    STATUS("ble_svc_gatt_init");
+    ESP_LOGI(TAG, "ble_svc_gatt_init");
     ble_svc_gatt_init();
-    STATUS("services initialized");
+    ESP_LOGI(TAG, "services initialized");
 
     int rc = ble_svc_gap_device_name_set(s_device_name);
-    if (rc != 0) STATUS("set_device_name rc=%d", rc);
+    if (rc != 0) ESP_LOGI(TAG, "set_device_name rc=%d", rc);
 
     rc = ble_svc_gap_device_appearance_set(APPEARANCE_HID_KEYBOARD);
-    if (rc != 0) STATUS("set_appearance rc=%d", rc);
+    if (rc != 0) ESP_LOGI(TAG, "set_appearance rc=%d", rc);
 
-    STATUS("calling register_hid_service");
+    ESP_LOGI(TAG, "calling register_hid_service");
     rc = register_hid_service();
     if (rc != 0) {
         ESP_LOGE(TAG, "HID register failed rc=%d, continuing without HID", rc);
     } else {
-        STATUS("ble_svc_hid_init");
+        ESP_LOGI(TAG, "ble_svc_hid_init");
         ble_svc_hid_init();   // must come AFTER all ble_svc_hid_add calls
     }
 
-    STATUS("calling nimble_port_freertos_init");
+    ESP_LOGI(TAG, "calling nimble_port_freertos_init");
     nimble_port_freertos_init(host_task);
-    STATUS("host_task launched");
+    ESP_LOGI(TAG, "host_task launched");
     return ESP_OK;
 }
 
