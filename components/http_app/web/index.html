@@ -1084,11 +1084,11 @@ function renderSystem(){
     </div>
     <div class=card>
       <div class=label>${t('system.change_pw_label')}</div>
-      <div class=row>
-        <input class=input id=oldPw type=password placeholder='${t('system.cur_pw')}' style='flex:1'>
-        <input class=input id=newPw type=password placeholder='${t('system.new_pw')}' style='flex:1'>
-        <button class=btn id=changePwB>${t('system.change')}</button>
-      </div>
+      <form class=form id=changePwF>
+        <label>${t('system.cur_pw')}<input class=input id=oldPw type=password autocomplete=current-password></label>
+        <label>${t('system.new_pw')}<input class=input id=newPw type=password autocomplete=new-password></label>
+        <button class=btn id=changePwB type=button style='align-self:flex-start'>${t('system.change')}</button>
+      </form>
     </div>
     <div class=card>
       <div class=label>${t('system.ota_label')}</div>
