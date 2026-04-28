@@ -91,6 +91,31 @@ body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;pa
   .mobiletabs .navitem{border-radius:0;padding:10px 14px;border-bottom:2px solid transparent}
   .mobiletabs .navitem.active{background:transparent;color:var(--t1);border-bottom-color:var(--accent)}
   .main{padding:16px}
+  .card{padding:14px 12px}
+  /* Wide tables on narrow phones: scroll horizontally inside the card
+     instead of overflowing into the whole page. display:block on a table
+     turns it into a generic block that respects overflow. */
+  .card > table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
+  .card > table thead, .card > table tbody, .card > table tr{width:max-content;min-width:100%}
+  /* IP / MAC / hostnames in kv dd's mustn't push the column off-screen. */
+  .kv dd{word-break:break-all}
+  /* Long-running input + button rows (worker edit, change pw, OTA, etc.)
+     wrap by default so nothing ends up half-clipped. */
+  .card .row{flex-wrap:wrap}
+}
+@media (max-width:420px){
+  .topbar{padding:8px 10px;gap:8px}
+  .stats{grid-template-columns:1fr}
+  .stats .stat:nth-child(3){grid-column:auto}
+  .ph h1{font-size:18px}
+  .ph .desc{font-size:12px}
+  .cal{gap:2px}
+  .cal .h{font-size:9px;padding:2px 0}
+  .calcell .d{font-size:9px}
+  .calcell .n{font-size:10px}
+  /* Worker row gets its own treatment: name input goes full-width on its
+     own line, buttons line up below. Avoids the "name field 60px wide" mess. */
+  #workersList input.input[data-field=name]{flex:1 0 100%}
 }
 
 .ph{margin:0 0 24px}
