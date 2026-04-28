@@ -27,7 +27,7 @@
   --r-lg:10px;
 }
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;height:100%}
+html,body{margin:0;padding:0;height:100%;overflow-x:hidden}
 body{
   font-family:-apple-system,'Inter',system-ui,sans-serif;
   font-size:13px;line-height:1.5;
@@ -105,6 +105,10 @@ body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;pa
 }
 @media (max-width:420px){
   .topbar{padding:8px 10px;gap:8px}
+  /* Health badge worst-case "BLE, WiFi, NTP, No WiFi" can push the lang
+     switcher off-screen. Cap + ellipsis instead. */
+  #healthBadge{max-width:140px;min-width:0}
+  #healthText{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .stats{grid-template-columns:1fr}
   .stats .stat:nth-child(3){grid-column:auto}
   .ph h1{font-size:18px}
