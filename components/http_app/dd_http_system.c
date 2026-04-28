@@ -374,10 +374,7 @@ static esp_err_t worker_to_backup_cb(const dd_worker_t *w, void *arg)
     cJSON *e = cJSON_CreateObject();
     cJSON_AddNumberToObject(e, "id", w->id);
     char addr_str[18];
-    snprintf(addr_str, sizeof(addr_str),
-             "%02x:%02x:%02x:%02x:%02x:%02x",
-             w->addr[0], w->addr[1], w->addr[2],
-             w->addr[3], w->addr[4], w->addr[5]);
+    format_mac(w->addr, addr_str);
     cJSON_AddStringToObject(e, "addr", addr_str);
     cJSON_AddStringToObject(e, "name", w->name);
     cJSON_AddStringToObject(e, "category", w->category);

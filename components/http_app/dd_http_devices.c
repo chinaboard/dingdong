@@ -88,10 +88,7 @@ static esp_err_t worker_to_json_cb(const dd_worker_t *w, void *arg)
     cJSON *j = cJSON_CreateObject();
     cJSON_AddNumberToObject(j, "id", w->id);
     char addr_str[18];
-    snprintf(addr_str, sizeof(addr_str),
-             "%02x:%02x:%02x:%02x:%02x:%02x",
-             w->addr[0], w->addr[1], w->addr[2],
-             w->addr[3], w->addr[4], w->addr[5]);
+    format_mac(w->addr, addr_str);
     cJSON_AddStringToObject(j, "addr", addr_str);
     cJSON_AddStringToObject(j, "name", w->name);
     cJSON_AddStringToObject(j, "category", w->category);
@@ -180,10 +177,7 @@ esp_err_t bonds_get(httpd_req_t *req)
     cJSON *arr = cJSON_CreateArray();
     for (int i = 0; i < n; i++) {
         char addr_str[18];
-        snprintf(addr_str, sizeof(addr_str),
-                 "%02x:%02x:%02x:%02x:%02x:%02x",
-                 addrs[i][0], addrs[i][1], addrs[i][2],
-                 addrs[i][3], addrs[i][4], addrs[i][5]);
+        format_mac(addrs[i], addr_str);
         cJSON *e = cJSON_CreateObject();
         cJSON_AddStringToObject(e, "addr", addr_str);
         cJSON_AddNumberToObject(e, "worker_id",

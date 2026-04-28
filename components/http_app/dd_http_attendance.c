@@ -320,10 +320,7 @@ static void emit_segment(pair_ctx_t *ctx, const pair_open_t *open,
     cJSON_AddNumberToObject(j, "worker_id", open->worker_id);
     if (open->has_addr) {
         char addr_str[18];
-        snprintf(addr_str, sizeof(addr_str),
-                 "%02x:%02x:%02x:%02x:%02x:%02x",
-                 open->addr[0], open->addr[1], open->addr[2],
-                 open->addr[3], open->addr[4], open->addr[5]);
+        format_mac(open->addr, addr_str);
         cJSON_AddStringToObject(j, "peer", addr_str);
     }
     cJSON_AddNumberToObject(j, "in_ts",  (double)open->in_ts);
@@ -709,10 +706,7 @@ esp_err_t today_get(httpd_req_t *req)
         }
         if (w->has_addr) {
             char addr_str[18];
-            snprintf(addr_str, sizeof(addr_str),
-                     "%02x:%02x:%02x:%02x:%02x:%02x",
-                     w->addr[0], w->addr[1], w->addr[2],
-                     w->addr[3], w->addr[4], w->addr[5]);
+            format_mac(w->addr, addr_str);
             cJSON_AddStringToObject(e, "peer", addr_str);
         }
         cJSON_AddNumberToObject(e, "total_seconds", w->total_seconds);

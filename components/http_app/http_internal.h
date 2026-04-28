@@ -23,6 +23,10 @@ bool      extract_cookie_value(httpd_req_t *req, const char *name,
                                 char *out, size_t cap);
 void      schedule_restart(int delay_ms);
 
+// Format a 6-byte BLE address into "xx:xx:xx:xx:xx:xx" (17 chars + NUL).
+// Caller passes a buffer of at least 18 bytes.
+void      format_mac(const uint8_t addr[6], char out[18]);
+
 // ---------- handlers ----------
 //
 // Each handler is non-static so the route table in dd_http.c can reference it
