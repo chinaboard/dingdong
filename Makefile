@@ -37,7 +37,7 @@ DOCKER_TTY = docker run --rm -it -v $(PWD):/project -w /project -e EXTRA_CFLAGS=
 .PHONY: build flash monitor flash-monitor erase clean fullclean menuconfig size shell
 
 build:
-	$(DOCKER_RUN) idf.py build
+	$(DOCKER_RUN) idf.py reconfigure build
 
 flash:
 	espflash flash \

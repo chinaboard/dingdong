@@ -49,7 +49,7 @@ jobs:
           docker run --rm -v "$PWD:/project" -w /project \
             -e EXTRA_CFLAGS='-DDD_TZ="CST-8" -DDD_LED_ENABLE=1 -DDD_LED_GPIO=8 -DDD_LED_BRIGHTNESS=10' \
             espressif/idf:v6.0.1 \
-            bash -c "git config --global --add safe.directory /project && idf.py build"
+            bash -c "git config --global --add safe.directory /project && idf.py reconfigure build"
 
       # Stage everything a fresh device needs to come up. The merged
       # `dingdong-merged.bin` is the easiest path for end users (single
