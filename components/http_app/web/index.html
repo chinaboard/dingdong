@@ -104,6 +104,14 @@ body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;pa
   /* Long-running input + button rows (worker edit, change pw, OTA, etc.)
      wrap by default so nothing ends up half-clipped. */
   .card .row{flex-wrap:wrap}
+  /* Inputs inside wrapping card rows should each take their own line on
+     mobile — without this, two `flex:1` inputs on the same row each end
+     up ~half-width (≈100px), too narrow to read placeholders like
+     "New password (≥8 chars)". */
+  .card .row > .input{flex-basis:100%;min-width:0}
+  /* Worker-filter select in attendance has `min-width:140px` inline; relax
+     it so it doesn't bully the buttons next to it on narrow phones. */
+  #workerFilter{min-width:0!important}
   /* iOS Safari auto-zooms when a tapped input is smaller than 16px,
      producing a jarring "page shifted" sensation. Bump inputs to 16px on
      mobile to prevent it. */
