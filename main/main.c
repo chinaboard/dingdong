@@ -87,7 +87,7 @@ static void schedule_heap_watchdog(void)
 
 // Periodic time-based event log rotation. Runs daily; trims events older than
 // DD_EVENTS_RETENTION_DAYS so the file stays bounded by ~3 months of activity
-// rather than 256K bytes (which is just a safety cap).
+// rather than 512 KB (which is just a safety cap).
 static void retention_cb(void *arg)
 {
     if (!dd_time_is_synced()) return;  // need real wall time

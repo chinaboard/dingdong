@@ -31,19 +31,13 @@ EXTRA_CFLAGS := -DDD_TZ=\"$(TZ)\" \
                 -DDD_LED_GPIO=$(LED_GPIO) \
                 -DDD_LED_BRIGHTNESS=$(LED_BRIGHTNESS)
 
-# Build-time identifier appended to the semver in ./VERSION as
-# `X.Y.Z+YYYYMMDD.HHMM` (UTC). CMakeLists.txt picks this up via -DBUILD_TS.
-# `:=` so it's evaluated once at make-invocation time, not re-evaluated per
-# rule.
-BUILD_TS := $(shell date -u +%Y%m%d.%H%M)
-
 DOCKER_RUN = docker run --rm -v $(PWD):/project -w /project -e EXTRA_CFLAGS="$(EXTRA_CFLAGS)" $(IDF_IMAGE)
 DOCKER_TTY = docker run --rm -it -v $(PWD):/project -w /project -e EXTRA_CFLAGS="$(EXTRA_CFLAGS)" $(IDF_IMAGE)
 
 .PHONY: build flash monitor flash-monitor erase clean fullclean menuconfig size shell
 
 build:
-	$(DOCKER_RUN) idf.py -DBUILD_TS=$(BUILD_TS) build
+	$(DOCKER_RUN) idf.py build
 
 flash:
 	espflash flash \

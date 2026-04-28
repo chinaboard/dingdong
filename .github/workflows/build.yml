@@ -24,34 +24,32 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
+      # fetch-depth: 0 so `git describe` inside CMake can see all tags;
+      # default shallow clone hides them.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # Compute version string the same way `make build` does locally:
-      #   <VERSION file>+YYYYMMDD.HHMM (UTC)
-      # Tag builds use the tag name (minus a leading `v`) as VERSION instead,
-      # so a `v0.5.1` tag yields `0.5.1+...`.
+      # Mirror what CMake's `git describe` will produce, so we can name
+      # artifacts consistently.
       - id: version
         run: |
-          BUILD_TS=$(date -u +%Y%m%d.%H%M)
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            BASE="${GITHUB_REF#refs/tags/v}"
-            echo "$BASE" > VERSION
-          else
-            BASE=$(cat VERSION)
-          fi
-          FULL="${BASE}+${BUILD_TS}"
-          echo "BUILD_TS=$BUILD_TS"  >> "$GITHUB_ENV"
-          echo "FULL_VER=$FULL"       >> "$GITHUB_ENV"
-          echo "version=$FULL"        >> "$GITHUB_OUTPUT"
+          VER=$(git describe --tags --dirty --always | sed 's/^v//')
+          echo "FULL_VER=$VER" >> "$GITHUB_ENV"
+          echo "version=$VER"   >> "$GITHUB_OUTPUT"
+          echo "Building $VER"
 
-      # Reuse the exact docker invocation from the local Makefile so CI builds
-      # are bit-for-bit comparable with developer builds.
+      # Reuse the exact docker invocation from the local Makefile so CI
+      # builds are bit-for-bit comparable with developer builds. CMake's
+      # `git describe` runs inside the container against the mounted .git/.
+      # safe.directory needed because container runs as a different uid than
+      # the file owner on the GH runner.
       - name: Build firmware
         run: |
           docker run --rm -v "$PWD:/project" -w /project \
             -e EXTRA_CFLAGS='-DDD_TZ="CST-8" -DDD_LED_ENABLE=1 -DDD_LED_GPIO=8 -DDD_LED_BRIGHTNESS=10' \
             espressif/idf:v6.0.1 \
-            idf.py -DBUILD_TS=${BUILD_TS} build
+            bash -c "git config --global --add safe.directory /project && idf.py build"
 
       # Stage everything a fresh device needs to come up. The merged
       # `dingdong-merged.bin` is the easiest path for end users (single
@@ -60,10 +58,10 @@ jobs:
       - name: Stage release assets
         run: |
           mkdir -p release
-          cp build/dingdong.bin                      "release/dingdong-${FULL_VER}.bin"
-          cp build/bootloader/bootloader.bin         release/bootloader.bin
-          cp build/partition_table/partition-table.bin release/partition-table.bin
-          cp build/ota_data_initial.bin              release/ota_data_initial.bin
+          cp build/dingdong.bin                          "release/dingdong-${FULL_VER}.bin"
+          cp build/bootloader/bootloader.bin             release/bootloader.bin
+          cp build/partition_table/partition-table.bin   release/partition-table.bin
+          cp build/ota_data_initial.bin                  release/ota_data_initial.bin
           docker run --rm -v "$PWD:/project" -w /project \
             espressif/idf:v6.0.1 \
             python -m esptool --chip esp32c6 merge-bin -o "release/dingdong-merged-${FULL_VER}.bin" \
@@ -79,8 +77,8 @@ jobs:
           path: release/
           retention-days: 90
 
-      # Release only fires on tag pushes (v*). Auto-generated notes use commit
-      # subjects between this tag and the previous one.
+      # Release only fires on tag pushes (v*). Auto-generated notes use
+      # commit subjects between this tag and the previous one.
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

@@ -44,7 +44,13 @@ Each macro has a `#ifndef … #define` fallback in the consuming `.c`, so a bare
 
 ## Versioning
 
-`VERSION` (a single-line file at the repo root) is the semver source of truth. `CMakeLists.txt` does `file(STRINGS "VERSION" BASE_VER)` and combines it with the `BUILD_TS` cache var the Makefile passes (`-DBUILD_TS=YYYYMMDD.HHMM`, UTC, evaluated once per `make` invocation), producing e.g. `0.5.0+20260428.1506`. IDF injects that into `esp_app_desc_t.version`, so the same string appears in bootloader logs, OTA descriptors, `/api/system/diag`, and the Web UI header. Bump `VERSION` for releases; the `+timestamp` suffix gives every individual build a unique identifier without manual fiddling. `esp_app_desc_t.version[32]` caps us at 31 chars — `X.Y.Z+YYYYMMDD.HHMM` is 19, plenty of room. Do **not** hardcode versions elsewhere.
+Tag-driven via `git describe --tags --dirty --always`, run from `CMakeLists.txt`. Three cases:
+
+- **On a clean tag** (`git tag v0.5.5`): version string is the bare semver, e.g. `0.5.5`.
+- **N commits past the last tag**: e.g. `0.5.5-3-gabc1234`.
+- **Working tree dirty**: `-dirty` appended.
+
+The `VERSION` file at the repo root is a fallback only (used when there's no git or no tags reachable, e.g. tarball checkout). To cut a release: `git tag v0.5.5 && git push --tags` — CI builds, attaches assets, and the version baked into `esp_app_desc_t.version` (and surfaced in bootloader logs / OTA descriptors / `/api/system/diag` / Web UI header) all match the tag exactly. `esp_app_desc_t.version[32]` caps at 31 chars, enforced by a `string(SUBSTRING)` truncation in `CMakeLists.txt`. Do **not** hardcode versions elsewhere.
 
 ## Top-level architecture
 
@@ -67,7 +73,7 @@ dd_time_sntp_start  background NTP retries until WiFi up
 After init, `app_main` enters an alive-tick loop (10s) plus three `esp_timer` callbacks set up at the bottom of `app_main`:
 - **OTA validate** (one-shot, 60 s): marks the running OTA image valid so the bootloader stops rolling back. If we panic in the first 60 s, the bootloader reverts. `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y` in sdkconfig.defaults makes this load-bearing.
 - **Heap watchdog** (every 10 s): warns at <20 KB free, hard-restarts at <6 KB.
-- **Retention** (daily + once at 60 s): trims `events.jsonl` older than `DD_EVENTS_RETENTION_DAYS` (90). The 256 KB rotation in `dd_storage` is just a safety cap.
+- **Retention** (daily + once at 60 s): trims `events.jsonl` older than `DD_EVENTS_RETENTION_DAYS` (90). The 512 KB rotation in `dd_storage` is just a safety cap.
 
 A separate FreeRTOS task watches GPIO9 (BOOT button); a 5-second long-press calls `dd_config_factory_reset()` + `dd_storage_event_wipe()` then `esp_restart()`. This is the only physical recovery path.
 
@@ -109,7 +115,7 @@ Each `components/<name>/` is an isolated IDF component with `include/dd_<name>.h
   - **Presence machine**: per-bond slot table with `last_seen_us`, `present`, `ack_event`. `dd_ble_presence_reset_events()` (called by `events_wipe`) clears `ack_event` so the next tick re-emits IN for everyone in proximity.
   - **Note on adv instances**: instance 0 is HID (legacy PDU). The ESP32-C6 BLE 5 controller can only sustain **one legacy advertising set at a time**, so don't add a second legacy adv instance — it'll either fail to start or push HID off the air. Extended PDU is fine for additional sets if needed.
 - `time_sync` — `esp_sntp` + monotonic↔wall translation. TZ is set once from the build-time `DD_TZ` macro (default `"CST-8"`); no runtime setter. `dd_time_mono_to_unix(mono_us)` is how callers backfill timestamps for events captured before NTP sync.
-- `storage` — LittleFS mount at `/storage`, single append-only `events.jsonl`. All file mutation is mutex-serialized. `dd_storage_event_count()` is cached (updated on append/rotate); don't replace it with a per-call scan. Rotation is two-tier: daily time-based (primary) and 256 KB hard cap (fallback). `dd_storage_event_delete_by_worker(id)` rewrites the file filtering out events for that worker (used by hard-delete worker flow).
+- `storage` — LittleFS mount at `/storage`, single append-only `events.jsonl`. All file mutation is mutex-serialized. `dd_storage_event_count()` is cached (updated on append/rotate); don't replace it with a per-call scan. Rotation is two-tier: daily time-based (primary) and 512 KB hard cap (fallback). `dd_storage_event_delete_by_worker(id)` rewrites the file filtering out events for that worker (used by hard-delete worker flow).
 - `events` — thin layer above `storage`: builds the JSON line, looks up worker_id by peer addr, and applies a **10 s debounce per (peer, type)** — but only for `DD_SRC_BLE_AUTO`. Manual web/button clicks are intentional and pass through.
 - `workers` — NVS-backed worker registry, in-RAM cache of up to 32 entries. **Hard delete** via `dd_worker_delete(id)` — slot is freed and id can be reused. (Old soft-revoke field `dd_worker_t.revoked` is kept for backup-restore compat but no longer set.) `dd_worker_wipe` exists only for `/api/system/restore`.
 - `led` — single WS2812 driven via `espressif/led_strip` managed component. 100 ms `esp_timer` polls `dd_wifi_state()` / `dd_time_is_synced()` / `dd_ble_pairing_active()` / heap and pushes a colour: red fast-blink (heap critical) > cyan fast-blink (pairing window) > purple breath (SoftAP) > blue fast-blink (STA connecting/down) > yellow slow-blink (STA up, no NTP) > dim green steady (all good). `dd_led_pulse(r,g,b,ms)` overrides everything for `ms`. Build-time `DD_LED_ENABLE=0` compiles out the whole state machine.
