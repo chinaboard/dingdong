@@ -259,6 +259,7 @@ details[open]>summary::before{content:'▾ '}
       <option value=en>EN</option>
       <option value=zh>中文</option>
     </select>
+    <button id=topLogoutB class=langsel style='display:none' title='Log out'>⏻</button>
   </header>
 
   <nav class=mobiletabs id=mobiletabs></nav>
@@ -335,10 +336,11 @@ const I18N = {
     'attendance.desc':'Raw event stream and paired sessions.',
     'attendance.all_workers':'All workers',
     'attendance.raw_view':'Raw view', 'attendance.sessions_view':'Sessions view',
-    'attendance.export_label':'Export / wipe',
+    'attendance.export_label':'Export',
     'attendance.from':'From', 'attendance.to':'To',
     'attendance.raw_csv':'Raw CSV', 'attendance.sessions_csv':'Sessions CSV', 'attendance.jsonl':'JSONL',
     'attendance.wipe':'Wipe all events',
+    'attendance.wipe_hint':'Permanently deletes every recorded check-in / check-out. Cannot be undone.',
     'attendance.wipe_confirm':'Wipe all events? This cannot be undone.',
     'attendance.no_sessions':'No sessions',
     'attendance.col_start':'Start', 'attendance.col_end':'End', 'attendance.col_duration':'Duration',
@@ -472,10 +474,11 @@ const I18N = {
     'attendance.desc':'原始事件流与配对后的会话记录。',
     'attendance.all_workers':'全部员工',
     'attendance.raw_view':'原始视图', 'attendance.sessions_view':'会话视图',
-    'attendance.export_label':'导出 / 清空',
+    'attendance.export_label':'导出',
     'attendance.from':'起', 'attendance.to':'止',
     'attendance.raw_csv':'原始 CSV', 'attendance.sessions_csv':'会话 CSV', 'attendance.jsonl':'JSONL',
     'attendance.wipe':'清空所有事件',
+    'attendance.wipe_hint':'永久删除每一条进/出记录。不可撤销。',
     'attendance.wipe_confirm':'确认清空所有事件?该操作不可撤销。',
     'attendance.no_sessions':'暂无会话',
     'attendance.col_start':'开始', 'attendance.col_end':'结束', 'attendance.col_duration':'时长',
@@ -652,6 +655,10 @@ async function init(){
     document.documentElement.lang = LANG==='zh' ? 'zh-CN' : 'en';
     refreshStatus().then(render);
   };
+  $('topLogoutB').onclick=async()=>{
+    await fetch('/api/auth/logout',{method:'POST'});
+    state.authed=false;render();
+  };
   const v=localStorage.getItem('dd_view');
   if(v&&NAV.find(n=>n.id===v))state.view=v;
   await refreshStatus();
@@ -665,6 +672,7 @@ async function init(){
 function render(){
   const wizard = state.setupMode || !state.authed;
   document.body.classList.toggle('wizard', wizard);
+  $('topLogoutB').style.display = wizard ? 'none' : '';
   if (wizard) {
     // No nav in wizard mode — clear stale tab content if rendered earlier.
     $('sidebar').innerHTML = '';
@@ -875,9 +883,12 @@ async function renderAttendance(){
         <button class=btn id=expRawCsv>${t('attendance.raw_csv')}</button>
         <button class='btn primary' id=expPairCsv>${t('attendance.sessions_csv')}</button>
         <button class='btn ghost' id=expJsonl>${t('attendance.jsonl')}</button>
-        <div class=grow></div>
-        <button class='btn danger' id=wipeB>${t('attendance.wipe')}</button>
       </div>
+    </div>
+    <div class=card>
+      <div class=label style='color:var(--danger)'>${t('attendance.wipe')}</div>
+      <div class='t-mute' style='font-size:12px;margin-bottom:10px'>${t('attendance.wipe_hint')}</div>
+      <button class='btn danger' id=wipeB>${t('attendance.wipe')}</button>
     </div>`;
 
   if(state.workers.length===0){
@@ -1056,8 +1067,6 @@ function renderSystem(){
       <div class=row style='margin-top:12px'>
         <button class='btn ghost' id=diagRefresh>${t('common.refresh')}</button>
         <button class='btn ghost' id=ntpResync>${t('system.sync_ntp')}</button>
-        <div class=grow></div>
-        <button class='btn ghost' id=logoutB>${t('system.logout')}</button>
       </div>
     </div>
     <div class=card>
@@ -1120,7 +1129,6 @@ function renderSystem(){
   $('diagRefresh').onclick=loadDiag;
   $('ntpResync').onclick=async e=>{await fetch('/api/system/time_resync',{method:'POST'});
     e.target.textContent='✓';setTimeout(()=>e.target.textContent=t('system.sync_ntp'),1500);};
-  $('logoutB').onclick=async()=>{await fetch('/api/auth/logout',{method:'POST'});state.authed=false;render();};
   $('nameSaveB').onclick=async e=>{
     const name=$('nameInput').value.trim();if(!name)return;
     const r=await fetch('/api/system/device_name',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
