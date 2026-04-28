@@ -64,6 +64,25 @@ a{color:var(--accent);text-decoration:none}
 .mainwrap{max-width:980px;margin:0 auto}
 
 .mobiletabs{display:none}
+/* Wizard mode (first-run setup + login): hide everything chrome-y, just show
+   brand + lang switcher + the form itself. Status badge / clock / IP are all
+   either uninitialised or irrelevant before the user finishes setup. */
+body.wizard .sidebar,
+body.wizard .mobiletabs,
+body.wizard #healthBadge,
+body.wizard .topbar .meta{display:none}
+body.wizard .main{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:max(8vh,40px) 24px 40px;
+}
+body.wizard .mainwrap{max-width:380px;width:100%;margin:0}
+body.wizard .ph{text-align:center;margin-bottom:28px}
+body.wizard .ph h1{font-size:22px;margin-bottom:6px}
+body.wizard .card + .card{margin-top:14px}
+/* Primary action in a wizard form should be full-width + centered. */
+body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;padding:8px 12px}
 @media (max-width:720px){
   .topbar{padding:10px 14px}
   .topbar .meta{display:none}
@@ -585,10 +604,17 @@ async function init(){
 }
 
 function render(){
+  const wizard = state.setupMode || !state.authed;
+  document.body.classList.toggle('wizard', wizard);
+  if (wizard) {
+    // No nav in wizard mode — clear stale tab content if rendered earlier.
+    $('sidebar').innerHTML = '';
+    $('mobiletabs').innerHTML = '';
+    if(state.setupMode){renderSetup();return;}
+    renderLogin();return;
+  }
   renderNav($('sidebar'),state.view);
   renderNav($('mobiletabs'),state.view);
-  if(state.setupMode){renderSetup();return;}
-  if(!state.authed){renderLogin();return;}
   if(state.view==='overview')renderOverview();
   else if(state.view==='attendance')renderAttendance();
   else if(state.view==='people')renderPeople();
@@ -599,7 +625,7 @@ function renderSetup(){
   const m=$('main');
   m.innerHTML=`
     <div class=ph><h1>${t('setup.title')}</h1><div class=desc>${t('setup.desc')}</div></div>
-    <div class=card style='max-width:420px'>
+    <div class=card>
       <form class=form id=setupF>
         <label>${t('setup.admin')} <span class=mono style='color:var(--t3)'>${t('setup.admin_hint')}</span>
           <input class=input name=admin_password type=password minlength=8 required></label>
@@ -607,19 +633,17 @@ function renderSetup(){
           <input class=input name=wifi_ssid required></label>
         <label>${t('setup.wifi_pass')}
           <input class=input name=wifi_password type=password></label>
-        <div class=row style='margin-top:6px'>
-          <button class='btn primary'>${t('setup.save')}</button>
-          <span class=t-neg id=msg></span>
-        </div>
+        <button class='btn primary' style='margin-top:6px;justify-content:center'>${t('setup.save')}</button>
+        <div class='t-neg' id=msg style='font-size:12px;text-align:center;min-height:14px'></div>
       </form>
     </div>
-    <div class=card style='max-width:420px'>
+    <div class=card>
       <div class=label>${t('setup.restore_label')}</div>
       <div class=row>
-        <input type=file id=restoreFile accept='.json' class=input>
+        <input type=file id=restoreFile accept='.json' class=input style='flex:1'>
         <button class=btn id=restoreB>${t('setup.restore_btn')}</button>
       </div>
-      <div class='mono t-mute' id=restoreMsg style='margin-top:8px;font-size:11px'></div>
+      <div class='mono t-mute' id=restoreMsg style='margin-top:8px;font-size:11px;text-align:center;min-height:14px'></div>
     </div>`;
   $('setupF').onsubmit=async e=>{e.preventDefault();
     const fd=Object.fromEntries(new FormData(e.target));
@@ -641,13 +665,11 @@ function renderSetup(){
 function renderLogin(){
   $('main').innerHTML=`
     <div class=ph><h1>${t('login.title')}</h1><div class=desc>${t('login.desc')}</div></div>
-    <div class=card style='max-width:340px'>
+    <div class=card>
       <form class=form id=loginF>
         <input class=input name=password type=password placeholder='${t('login.admin_ph')}' required autofocus>
-        <div class=row style='margin-top:6px'>
-          <button class='btn primary'>${t('login.btn')}</button>
-          <span class=t-neg id=msg></span>
-        </div>
+        <button class='btn primary' style='margin-top:6px;justify-content:center'>${t('login.btn')}</button>
+        <div class='t-neg' id=msg style='font-size:12px;text-align:center;min-height:14px'></div>
       </form>
     </div>`;
   $('loginF').onsubmit=async e=>{e.preventDefault();
