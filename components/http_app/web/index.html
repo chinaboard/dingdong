@@ -1032,6 +1032,7 @@ async function loadWorkers(){
         <button class='btn sm saveW' data-id=${w.id}>${t('common.save')}</button>
         <button class='btn sm punchW' data-id=${w.id} data-type=in style='color:var(--success);border-color:rgba(76,183,130,.30)'>${t('people.in')}</button>
         <button class='btn sm punchW' data-id=${w.id} data-type=out style='color:var(--danger);border-color:rgba(232,95,95,.30)'>${t('people.out')}</button>
+        <div class=grow></div>
         <button class='btn sm danger revokeW' data-id=${w.id}>${t('people.delete')}</button>
       </div>
       <div class='mono t-mute' style='font-size:11px;margin-top:4px'>id=${w.id} · ${w.addr} · ${w.bonded?`<span class=t-pos>${t('people.bonded')}</span>`:`<span class=t-mute>${t('people.not_bonded')}</span>`}</div>
@@ -1110,7 +1111,8 @@ function renderSystem(){
     <div class=card>
       <div class=label>${t('system.danger_label')}</div>
       <div class=row>
-        <button class='btn danger' id=restartB>${t('system.restart')}</button>
+        <button class=btn id=restartB>${t('system.restart')}</button>
+        <div class=grow></div>
         <button class='btn danger' id=factoryB>${t('system.factory')}</button>
       </div>
     </div>`;
