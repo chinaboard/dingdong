@@ -124,8 +124,10 @@ body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;pa
   .calcell .d{font-size:9px}
   .calcell .n{font-size:10px}
   /* Worker row gets its own treatment: name input goes full-width on its
-     own line, buttons line up below. Avoids the "name field 60px wide" mess. */
-  #workersList input.input[data-field=name]{flex:1 0 100%}
+     own line, category right under it. Avoids the "name field 60px wide"
+     mess when 6 elements try to share a 320px row. */
+  .w-name{flex:1 0 100%;min-width:0}
+  .w-cat{flex:1 0 100%;max-width:none}
 }
 
 .ph{margin:0 0 24px}
@@ -159,6 +161,11 @@ body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;pa
 .input,select.input{background:var(--bg);border:1px solid var(--border-strong);border-radius:var(--r);padding:6px 10px;color:var(--t1);outline:none;transition:border-color .12s;font-size:13px}
 .input:focus{border-color:var(--accent)}
 .input::placeholder{color:var(--t3)}
+/* Worker-row inputs: name takes remaining width, category is fixed-narrow.
+   Defined as classes (not inline style=) so the mobile media query can
+   actually override them — inline styles outrank media-query selectors. */
+.w-name{flex:1;min-width:120px}
+.w-cat{max-width:100px}
 
 .form{display:flex;flex-direction:column;gap:10px}
 .form label{font-size:12px;color:var(--t2);display:flex;flex-direction:column;gap:4px}
@@ -992,8 +999,8 @@ async function loadWorkers(){
   box.innerHTML=state.workers.map(w=>`
     <div style='padding:10px 0;border-bottom:1px solid var(--border)' data-w=${w.id}>
       <div class=row style='flex-wrap:wrap'>
-        <input class=input data-id=${w.id} data-field=name value='${escAttr(w.name)}' placeholder='${t('people.name_ph')}' style='flex:1;min-width:120px'>
-        <input class=input data-id=${w.id} data-field=category value='${escAttr(w.category)}' placeholder='${t('people.cat_ph')}' style='max-width:100px'>
+        <input class='input w-name' data-id=${w.id} data-field=name value='${escAttr(w.name)}' placeholder='${t('people.name_ph')}'>
+        <input class='input w-cat' data-id=${w.id} data-field=category value='${escAttr(w.category)}' placeholder='${t('people.cat_ph')}'>
         <button class='btn sm saveW' data-id=${w.id}>${t('common.save')}</button>
         <button class='btn sm punchW' data-id=${w.id} data-type=in style='color:var(--success);border-color:rgba(76,183,130,.30)'>${t('people.in')}</button>
         <button class='btn sm punchW' data-id=${w.id} data-type=out style='color:var(--danger);border-color:rgba(232,95,95,.30)'>${t('people.out')}</button>
