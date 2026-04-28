@@ -19,6 +19,7 @@
 #include "dd_time.h"
 #include "dd_storage.h"
 #include "dd_worker.h"
+#include "dd_event.h"
 #include "dd_led.h"
 
 static const char *TAG = "dingdong";
@@ -197,6 +198,7 @@ void app_main(void)
     dd_metrics_record_boot();
     ESP_ERROR_CHECK(dd_time_init());
     ESP_ERROR_CHECK(dd_storage_init());
+    ESP_ERROR_CHECK(dd_event_init());
     ESP_ERROR_CHECK(dd_worker_init());
 
     // Quiet down chatty subsystems for serial monitor readability.

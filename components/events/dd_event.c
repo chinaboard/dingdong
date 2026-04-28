@@ -29,6 +29,12 @@ typedef struct {
 static debounce_slot_t s_debounce[DEBOUNCE_SLOTS];
 static SemaphoreHandle_t s_debounce_lock = NULL;
 
+esp_err_t dd_event_init(void)
+{
+    s_debounce_lock = xSemaphoreCreateMutex();
+    return s_debounce_lock ? ESP_OK : ESP_ERR_NO_MEM;
+}
+
 static debounce_slot_t *get_slot(const uint8_t addr[6])
 {
     int free_idx = -1;
@@ -81,15 +87,6 @@ esp_err_t dd_event_record(dd_event_type_t type, dd_event_source_t src,
 {
     int64_t mono = dd_time_mono_us();
     int64_t ts   = dd_time_now_unix();   // 0 if NTP not synced
-
-    // Lazy-init debounce mutex (callers may come from BLE host or HTTP task).
-    if (!s_debounce_lock) {
-        SemaphoreHandle_t m = xSemaphoreCreateMutex();
-        // Race-safe: only the first creator wins; others discard their copy.
-        if (!__sync_bool_compare_and_swap(&s_debounce_lock, NULL, m)) {
-            vSemaphoreDelete(m);
-        }
-    }
 
     // Debounce only BLE_AUTO source — manual web clicks are intentional and
     // shouldn't be silently dropped on double-click. Source-aware skip.

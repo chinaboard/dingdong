@@ -19,6 +19,10 @@ typedef enum {
     DD_SRC_MANUAL_BTN  = 2,
 } dd_event_source_t;
 
+// Set up the per-peer debounce mutex. Must be called once at boot, before
+// any dd_event_record() — typically right after dd_storage_init().
+esp_err_t dd_event_init(void);
+
 // Record one event. peer_addr may be NULL if unknown (e.g. manual web). For BLE
 // events, pass the raw 6-byte peer address. reason is BLE disconnect reason
 // for OUT events; ignored otherwise.

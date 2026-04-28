@@ -62,6 +62,7 @@ dd_session_init     in-RAM admin session table (4 slots, 7-day TTL)
 dd_metrics_record_boot
 dd_time_init        applies TZ from NVS (fallback DD_TZ macro); SNTP started later
 dd_storage_init     LittleFS mount on "storage" partition → /storage
+dd_event_init       per-peer debounce mutex
 dd_worker_init      load NVS-backed worker registry into RAM
 dd_ble_start        NimBLE host: peripheral (HID adv) + observer (continuous scan) + bond store
 dd_led_init         WS2812 status LED (no-op when DD_LED_ENABLE=0)
