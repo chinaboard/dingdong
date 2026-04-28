@@ -77,9 +77,11 @@ A separate FreeRTOS task watches GPIO9 (BOOT button); a 5-second long-press call
 
 | Boot mode | Trigger | WiFi mode |
 |-----------|---------|-----------|
-| `DD_BOOT_FIRST_RUN` | no admin password set | SoftAP `dingdong-setup` (open) |
-| `DD_BOOT_NO_WIFI`   | admin set, no WiFi creds | SoftAP `dingdong-setup` |
+| `DD_BOOT_FIRST_RUN` | no admin password set | SoftAP `dingdong-setup-XXXX` (open) |
+| `DD_BOOT_NO_WIFI`   | admin set, no WiFi creds | SoftAP `dingdong-setup-XXXX` |
 | `DD_BOOT_NORMAL`    | both present | STA |
+
+`XXXX` is the last 2 bytes of the WiFi STA MAC, so multiple devices in setup mode stay distinguishable on the same scan list.
 
 In SoftAP modes the Web UI is the first-run wizard; in STA mode it's the admin console. STA mode auto-restarts the device after 10 minutes of continuous disconnection (`STA_GIVE_UP_MS` in `dd_wifi.c`) so a transient AP outage doesn't strand the device.
 

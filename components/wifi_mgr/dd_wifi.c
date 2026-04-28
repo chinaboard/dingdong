@@ -15,7 +15,11 @@
 
 static const char *TAG = "wifi";
 
-#define AP_SSID         "dingdong-setup"
+// SoftAP SSID is `dingdong-setup-XXXX` where XXXX is the last 2 bytes of the
+// chip's WiFi STA MAC, computed once at start_softap() time. Keeps multiple
+// devices in setup mode distinguishable to a phone scanning nearby APs.
+#define AP_SSID_PREFIX  "dingdong-setup-"
+#define AP_SSID_MAX     32       // WiFi SSID hard limit
 #define AP_CHANNEL      6
 #define AP_MAX_CONN     4
 #define STA_RETRY_MAX   5
@@ -79,7 +83,9 @@ static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *da
         case WIFI_EVENT_AP_START: {
             esp_netif_ip_info_t ip;
             esp_netif_get_ip_info(s_netif_ap, &ip);
-            ESP_LOGI(TAG, "SoftAP up: ssid=" AP_SSID " gw=" IPSTR, IP2STR(&ip.gw));
+            wifi_config_t wc;
+            esp_wifi_get_config(WIFI_IF_AP, &wc);
+            ESP_LOGI(TAG, "SoftAP up: ssid=%s gw=" IPSTR, (char *)wc.ap.ssid, IP2STR(&ip.gw));
             s_state = DD_WIFI_STATE_AP;
             break;
         }
@@ -114,15 +120,24 @@ static esp_err_t start_softap(void)
     // STA netif also created so esp_wifi_scan_start can run while AP is up.
     s_netif_sta = esp_netif_create_default_wifi_sta();
 
+    // Build per-device SSID `dingdong-setup-XXXX` from the BT MAC last 2
+    // bytes. Using BT MAC (not WiFi MAC) so the suffix matches the BLE
+    // device name `dingdong-XXXX` — one identifier per physical device.
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_BT);
+    char ssid[AP_SSID_MAX];
+    int slen = snprintf(ssid, sizeof(ssid), AP_SSID_PREFIX "%02X%02X",
+                        mac[4], mac[5]);
+
     wifi_config_t cfg = {
         .ap = {
-            .ssid           = AP_SSID,
-            .ssid_len       = strlen(AP_SSID),
             .channel        = AP_CHANNEL,
             .max_connection = AP_MAX_CONN,
             .authmode       = WIFI_AUTH_OPEN,
         },
     };
+    memcpy(cfg.ap.ssid, ssid, slen);
+    cfg.ap.ssid_len = slen;
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &cfg));
