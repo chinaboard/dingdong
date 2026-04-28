@@ -11,10 +11,11 @@ extern "C" {
 // connectivity probes hit our HTTP server and the OS pops up the in-network
 // browser pointed at the setup page.
 //
-// Idempotent: a second start with the same IP is a no-op. Stop is safe to
-// call when not running. Intended to run only in SoftAP boot modes.
+// Idempotent: a second start with a different IP just updates the answer in
+// place. The task runs for the entire SoftAP lifetime (until reboot); there
+// is no stop function — SoftAP modes never transition to STA without a
+// reboot, so the asymmetry isn't paid for.
 esp_err_t dd_captive_start(uint32_t gateway_ip);
-esp_err_t dd_captive_stop(void);
 
 #ifdef __cplusplus
 }

@@ -37,9 +37,7 @@ static const char *TAG = "captive";
 #define DNS_CLASS_IN 1
 
 static TaskHandle_t s_task = NULL;
-static int          s_sock = -1;
 static uint32_t     s_answer_ip = 0;   // network-byte-order
-static volatile bool s_should_stop = false;
 
 // DNS message header (12 bytes, big-endian on wire).
 typedef struct __attribute__((packed)) {
@@ -132,11 +130,6 @@ static void dns_task(void *arg)
         return;
     }
 
-    // Short recv timeout so we can poll s_should_stop.
-    struct timeval tv = { .tv_sec = 1, .tv_usec = 0 };
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
-    s_sock = sock;
     {
         uint8_t *o = (uint8_t *)&s_answer_ip;
         ESP_LOGI(TAG, "DNS listening on UDP/53, redirecting all A -> %u.%u.%u.%u",
@@ -145,42 +138,23 @@ static void dns_task(void *arg)
 
     uint8_t buf[DNS_BUF_MAX];
     uint8_t resp[DNS_BUF_MAX];
-    while (!s_should_stop) {
+    for (;;) {
         struct sockaddr_in src;
         socklen_t srclen = sizeof(src);
         int n = recvfrom(sock, buf, sizeof(buf), 0,
                         (struct sockaddr *)&src, &srclen);
-        if (n <= 0) continue;  // timeout or error → loop, check stop flag
+        if (n <= 0) continue;
 
         int rn = build_response(buf, n, resp, sizeof(resp));
         if (rn <= 0) continue;
         sendto(sock, resp, rn, 0, (struct sockaddr *)&src, srclen);
     }
-
-    close(sock);
-    s_sock = -1;
-    s_task = NULL;
-    ESP_LOGI(TAG, "DNS stopped");
-    vTaskDelete(NULL);
 }
 
 esp_err_t dd_captive_start(uint32_t gateway_ip)
 {
-    if (s_task) {
-        // Already running. Update IP in place if it's changed (rare).
-        s_answer_ip = gateway_ip;
-        return ESP_OK;
-    }
     s_answer_ip = gateway_ip;
-    s_should_stop = false;
+    if (s_task) return ESP_OK;  // already running; new IP applied above
     BaseType_t ok = xTaskCreate(dns_task, "captive_dns", 4096, NULL, 5, &s_task);
     return ok == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
-}
-
-esp_err_t dd_captive_stop(void)
-{
-    if (!s_task) return ESP_OK;
-    s_should_stop = true;
-    // Task will close socket and self-delete on next recvfrom timeout.
-    return ESP_OK;
 }
