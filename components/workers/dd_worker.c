@@ -69,8 +69,6 @@ static esp_err_t load_one(nvs_handle_t h, uint16_t id, dd_worker_t *out)
     }
     const cJSON *jct = cJSON_GetObjectItem(j, "created_at");
     if (cJSON_IsNumber(jct)) out->created_at = (int64_t)jct->valuedouble;
-    const cJSON *jrv = cJSON_GetObjectItem(j, "revoked");
-    if (cJSON_IsBool(jrv)) out->revoked = cJSON_IsTrue(jrv);
 
     cJSON_Delete(j);
     return ESP_OK;
@@ -90,7 +88,6 @@ static esp_err_t save_one(nvs_handle_t h, const dd_worker_t *w)
     cJSON_AddStringToObject(j, "name", w->name);
     cJSON_AddStringToObject(j, "category", w->category);
     cJSON_AddNumberToObject(j, "created_at", (double)w->created_at);
-    cJSON_AddBoolToObject  (j, "revoked", w->revoked);
 
     char *s = cJSON_PrintUnformatted(j);
     cJSON_Delete(j);
@@ -151,45 +148,13 @@ uint16_t dd_worker_lookup_or_create(const uint8_t addr[6])
     if (!addr) return 0;
 
     uint16_t existing = dd_worker_find_by_addr(addr);
-    if (existing != 0) {
-        // If existing worker was revoked, un-revoke (re-pair after revoke).
-        dd_worker_t w;
-        if (dd_worker_get(existing, &w) == ESP_OK && w.revoked) {
-            xSemaphoreTake(s_lock, portMAX_DELAY);
-            for (size_t i = 0; i < s_count; i++) {
-                if (s_workers[i].id == existing) {
-                    s_workers[i].revoked = false;
-                    nvs_handle_t h;
-                    if (nvs_open(NS, NVS_READWRITE, &h) == ESP_OK) {
-                        save_one(h, &s_workers[i]);
-                        nvs_close(h);
-                    }
-                    break;
-                }
-            }
-            xSemaphoreGive(s_lock);
-            ESP_LOGI(TAG, "worker id=%u un-revoked (re-paired)", existing);
-        }
-        return existing;
-    }
+    if (existing != 0) return existing;
 
     xSemaphoreTake(s_lock, portMAX_DELAY);
 
-    // Active count check (revoked entries don't count toward the limit).
-    int active = 0;
-    for (size_t i = 0; i < s_count; i++) if (!s_workers[i].revoked) active++;
-    if (active >= DD_WORKER_MAX) {
-        xSemaphoreGive(s_lock);
-        ESP_LOGW(TAG, "table full (%d active), can't create", active);
-        return 0;
-    }
-
-    // Always append (don't reuse revoked slots — keeps in-memory cache able
-    // to resolve historical event worker_ids by name). If we hit s_count
-    // hard cap, can't add (rare; 32 slots).
     if (s_count >= DD_WORKER_MAX) {
         xSemaphoreGive(s_lock);
-        ESP_LOGW(TAG, "in-memory table full (factory_reset to compact)");
+        ESP_LOGW(TAG, "table full (%u slots), can't create", (unsigned)s_count);
         return 0;
     }
 
@@ -200,7 +165,6 @@ uint16_t dd_worker_lookup_or_create(const uint8_t addr[6])
     snprintf(w->name, sizeof(w->name), "Unnamed_%04x%02x", s_next_id, addr[5]);
     w->category[0] = '\0';
     w->created_at = (int64_t)time(NULL);
-    w->revoked = false;
 
     nvs_handle_t h;
     esp_err_t err = nvs_open(NS, NVS_READWRITE, &h);
@@ -273,7 +237,6 @@ esp_err_t dd_worker_update(uint16_t id, const char *name, const char *category)
         memset(w->category, 0, sizeof(w->category));
         strncpy(w->category, category, sizeof(w->category) - 1);
     }
-    w->revoked = false;
 
     nvs_handle_t h;
     esp_err_t err = nvs_open(NS, NVS_READWRITE, &h);

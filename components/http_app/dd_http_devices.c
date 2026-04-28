@@ -96,7 +96,6 @@ static esp_err_t worker_to_json_cb(const dd_worker_t *w, void *arg)
     cJSON_AddStringToObject(j, "name", w->name);
     cJSON_AddStringToObject(j, "category", w->category);
     cJSON_AddNumberToObject(j, "created_at", (double)w->created_at);
-    cJSON_AddBoolToObject  (j, "revoked", w->revoked);
     cJSON_AddBoolToObject  (j, "bonded", dd_ble_bond_exists(w->addr));
     cJSON_AddItemToArray(arr, j);
     return ESP_OK;

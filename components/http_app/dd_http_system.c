@@ -382,7 +382,6 @@ static esp_err_t worker_to_backup_cb(const dd_worker_t *w, void *arg)
     cJSON_AddStringToObject(e, "name", w->name);
     cJSON_AddStringToObject(e, "category", w->category);
     cJSON_AddNumberToObject(e, "created_at", (double)w->created_at);
-    cJSON_AddBoolToObject  (e, "revoked", w->revoked);
     cJSON_AddItemToArray(arr, e);
     return ESP_OK;
 }
@@ -477,7 +476,6 @@ esp_err_t restore_post(httpd_req_t *req)
             const cJSON *name_j = cJSON_GetObjectItem(e, "name");
             const cJSON *cat_j  = cJSON_GetObjectItem(e, "category");
             const cJSON *ct_j   = cJSON_GetObjectItem(e, "created_at");
-            const cJSON *rv_j   = cJSON_GetObjectItem(e, "revoked");
             if (!cJSON_IsNumber(id_j)) continue;
             w.id = (uint16_t)id_j->valuedouble;
             if (cJSON_IsString(addr_j)) {
@@ -494,8 +492,6 @@ esp_err_t restore_post(httpd_req_t *req)
                 strncpy(w.category, cat_j->valuestring, sizeof(w.category) - 1);
             if (cJSON_IsNumber(ct_j))
                 w.created_at = (int64_t)ct_j->valuedouble;
-            if (cJSON_IsBool(rv_j))
-                w.revoked = cJSON_IsTrue(rv_j);
             dd_worker_restore(&w);
         }
     }
@@ -590,9 +586,6 @@ esp_err_t diag_get(httpd_req_t *req)
 
     cJSON_AddNumberToObject(j, "workers_count",  (double)dd_worker_count());
     cJSON_AddNumberToObject(j, "events_count",   (double)dd_storage_event_count());
-
-    UBaseType_t n_tasks = uxTaskGetNumberOfTasks();
-    cJSON_AddNumberToObject(j, "tasks_count", (double)n_tasks);
 
     const esp_partition_t *running = esp_ota_get_running_partition();
     const esp_partition_t *next    = esp_ota_get_next_update_partition(NULL);

@@ -39,9 +39,6 @@ CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=y
 # --- Logging ---
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_COLORS=y
-# NimBLE prints "GAP procedure initiated..." on every adv/connect change.
-# Quiet that down to WARN to keep serial monitor readable.
-CONFIG_BT_LOG_NIMBLE_DEFAULT_LEVEL_WARN=y
 
 # --- Tasks ---
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

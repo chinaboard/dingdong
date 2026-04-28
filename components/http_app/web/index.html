@@ -305,7 +305,7 @@ const I18N = {
     'people.no_workers':'No workers yet — first BLE pairing creates one',
     'people.name_ph':'name', 'people.cat_ph':'category',
     'people.in':'+IN', 'people.out':'+OUT',
-    'people.deleted':'Deleted', 'people.delete':'Delete',
+    'people.delete':'Delete',
     'people.note_prompt':'Note (optional)',
     'people.delete_confirm':'Permanently delete this worker? Their BLE bond and all attendance records will also be removed. This cannot be undone.',
     'people.bonded':'bonded', 'people.not_bonded':'not bonded',
@@ -442,7 +442,7 @@ const I18N = {
     'people.no_workers':'暂无员工 — 首次 BLE 配对会自动创建',
     'people.name_ph':'姓名', 'people.cat_ph':'分组',
     'people.in':'+上班', 'people.out':'+下班',
-    'people.deleted':'已删除', 'people.delete':'删除',
+    'people.delete':'删除',
     'people.note_prompt':'备注 (可选)',
     'people.delete_confirm':'确认永久删除该员工?其 BLE 配对与全部考勤记录会一并清除,操作不可撤销。',
     'people.bonded':'已配对', 'people.not_bonded':'未配对',
@@ -954,7 +954,7 @@ async function loadWorkers(){
         <button class='btn sm saveW' data-id=${w.id}>${t('common.save')}</button>
         <button class='btn sm punchW' data-id=${w.id} data-type=in style='color:var(--success);border-color:rgba(76,183,130,.30)'>${t('people.in')}</button>
         <button class='btn sm punchW' data-id=${w.id} data-type=out style='color:var(--danger);border-color:rgba(232,95,95,.30)'>${t('people.out')}</button>
-        ${w.revoked?`<span class=t-mute style="font-size:11px">${t('people.deleted')}</span>`:`<button class='btn sm danger revokeW' data-id=${w.id}>${t('people.delete')}</button>`}
+        <button class='btn sm danger revokeW' data-id=${w.id}>${t('people.delete')}</button>
       </div>
       <div class='mono t-mute' style='font-size:11px;margin-top:4px'>id=${w.id} · ${w.addr} · ${w.bonded?`<span class=t-pos>${t('people.bonded')}</span>`:`<span class=t-mute>${t('people.not_bonded')}</span>`}</div>
     </div>`).join('');

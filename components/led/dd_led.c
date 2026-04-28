@@ -54,10 +54,6 @@ static bool               s_runtime_enabled = true;       // loaded from NVS at 
 #define NVS_NS         "led"
 #define KEY_ENABLED    "enabled"
 
-// Pulse override (highest priority). Public API for transient color flashes.
-static int64_t s_pulse_until_us = 0;
-static rgb_t   s_pulse_color    = {0, 0, 0};
-
 static rgb_t scale(rgb_t in, uint8_t num, uint8_t den)
 {
     rgb_t out = {
@@ -115,24 +111,7 @@ static void tick_cb(void *arg)
         }
     }
 
-    // Pulse override (highest priority — wins over everything else above)
-    if (esp_timer_get_time() < s_pulse_until_us) {
-        color = s_pulse_color;
-    }
-
     push(color);
-}
-
-void dd_led_pulse(uint8_t r, uint8_t g, uint8_t b, int duration_ms)
-{
-    if (!s_strip || duration_ms <= 0) return;
-    if (!s_runtime_enabled) return;
-    s_pulse_color.r = r;
-    s_pulse_color.g = g;
-    s_pulse_color.b = b;
-    s_pulse_until_us = esp_timer_get_time() + (int64_t)duration_ms * 1000;
-    // Push immediately so we don't wait up to TICK_MS for the pulse to show
-    push(s_pulse_color);
 }
 
 esp_err_t dd_led_set_enabled(bool enabled)
@@ -211,7 +190,6 @@ esp_err_t dd_led_init(void)
 #else   /* DD_LED_ENABLE == 0 */
 
 esp_err_t dd_led_init(void) { return ESP_OK; }
-void dd_led_pulse(uint8_t r, uint8_t g, uint8_t b, int duration_ms) { (void)r;(void)g;(void)b;(void)duration_ms; }
 esp_err_t dd_led_set_enabled(bool enabled) { (void)enabled; return ESP_OK; }
 bool dd_led_is_enabled(void) { return false; }
 

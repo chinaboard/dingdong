@@ -11,8 +11,7 @@ extern "C" {
 
 #define DD_WORKER_NAME_MAX     32
 #define DD_WORKER_CATEGORY_MAX 16
-#define DD_WORKER_MAX          32  // hard cap; revoked workers still occupy slots
-                                   // until factory reset (kept for history lookup)
+#define DD_WORKER_MAX          32
 
 typedef struct {
     uint16_t id;                                 // 1-based, 0 = unset/invalid
@@ -20,7 +19,6 @@ typedef struct {
     char     name[DD_WORKER_NAME_MAX];
     char     category[DD_WORKER_CATEGORY_MAX];
     int64_t  created_at;
-    bool     revoked;
 } dd_worker_t;
 
 esp_err_t dd_worker_init(void);
@@ -34,7 +32,7 @@ uint16_t  dd_worker_lookup_or_create(const uint8_t addr[6]);
 
 esp_err_t dd_worker_get(uint16_t id, dd_worker_t *out);
 
-// Update name/category (and clear revoked) for an existing worker.
+// Update name/category for an existing worker.
 esp_err_t dd_worker_update(uint16_t id, const char *name, const char *category);
 
 // Hard-delete the worker: remove the slot from NVS + RAM cache so the id
@@ -43,7 +41,7 @@ esp_err_t dd_worker_update(uint16_t id, const char *name, const char *category);
 // would otherwise show "id=N (unknown)" in views).
 esp_err_t dd_worker_delete(uint16_t id);
 
-// Iterate all workers (including revoked). cb returns ESP_OK to continue.
+// Iterate all workers. cb returns ESP_OK to continue.
 typedef esp_err_t (*dd_worker_iter_cb)(const dd_worker_t *w, void *arg);
 esp_err_t dd_worker_iter(dd_worker_iter_cb cb, void *arg);
 
