@@ -95,8 +95,14 @@ body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;pa
   /* Wide tables on narrow phones: scroll horizontally inside their wrapper
      div instead of overflowing into the page. Tables themselves stay real
      tables (so column alignment between rows survives) — only the wrapper
-     gets overflow-x:auto. */
+     gets overflow-x:auto. Cells get white-space:nowrap and the table goes
+     width:auto so cell content actually pushes the table past wrapper
+     width — without that, cells just wrap and the scroll never triggers. */
   #eventsList,#todayList,#calDay{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #eventsList table,#todayList table,#calDay table{width:auto;min-width:100%}
+  #eventsList th,#eventsList td,
+  #todayList th,#todayList td,
+  #calDay th,#calDay td{white-space:nowrap}
   /* IP / MAC / hostnames in kv dd's mustn't push the column off-screen. */
   .kv dd{word-break:break-all}
   /* Long-running input + button rows (worker edit, change pw, OTA, etc.)
