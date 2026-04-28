@@ -1,0 +1,93 @@
+# --- Target ---
+CONFIG_IDF_TARGET="esp32c6"
+
+# --- Flash ---
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# --- Partition Table ---
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+
+# --- Bluetooth (NimBLE host) ---
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=2
+
+# Extended advertising: 2 instances (HID + BTHome time broadcaster).
+# HID instance uses legacy_pdu for iPhone backward-compat.
+CONFIG_BT_NIMBLE_EXT_ADV=y
+CONFIG_BT_NIMBLE_MAX_EXT_ADV_INSTANCES=2
+
+# HID service (impersonate BLE keyboard so iPhone bonds and auto-reconnects)
+CONFIG_BT_NIMBLE_HID_SERVICE=y
+CONFIG_BT_NIMBLE_SVC_HID_MAX_RPTS=4
+
+# Security manager: LE Secure Connections + bonding + Display-only IO cap
+# so we can drive Passkey Entry from the Web UI.
+CONFIG_BT_NIMBLE_SM_SC=y
+CONFIG_BT_NIMBLE_SM_LEGACY=n
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+
+# Whitelist large enough to hold all bonded workers
+CONFIG_BT_NIMBLE_WHITELIST_SIZE=16
+
+# --- WiFi ---
+CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=y
+
+# --- Logging ---
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_COLORS=y
+# NimBLE prints "GAP procedure initiated..." on every adv/connect change.
+# Quiet that down to WARN to keep serial monitor readable.
+CONFIG_BT_LOG_NIMBLE_DEFAULT_LEVEL_WARN=y
+
+# --- Tasks ---
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# --- OTA: rollback safety ---
+# Bootloader auto-reverts to previous app if new image fails to call
+# esp_ota_mark_app_valid_cancel_rollback() before reboot.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# --- Console over USB Serial/JTAG (ESP32-C6 native USB) ---
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# --- Size optimization ---
+# Compiler -Os (default IDF is -Og debug). Single biggest single win — saves
+# ~200-300 KB on this app.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# Newlib nano formatting: smaller printf, no float by default. We don't print
+# floats anywhere; if added, prefix with %.0f or use snprintf manual formatting.
+CONFIG_NEWLIB_NANO_FORMAT=y
+
+# Bring assertions to ENABLE (was 2 = SILENT — already was, but make explicit)
+CONFIG_COMPILER_OPTIMIZATION_ASSERTION_LEVEL=2
+
+# --- BLE: roles ---
+# Peripheral (HID), Broadcaster (BTHome), AND Observer (continuous scan for
+# bonded iPhones to detect presence via RPA resolution against stored IRK).
+# Observer is the core attendance signal — without it we'd be relying on iOS
+# to reconnect after iPhone wakes, which is unreliable and slow.
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+
+# --- mbedTLS: keep only SHA-256 (PBKDF2 needs it). Drop SHA-1/384/512. ---
+CONFIG_MBEDTLS_SHA1_C=n
+CONFIG_MBEDTLS_SHA384_C=n
+CONFIG_MBEDTLS_SHA512_C=n
+
+# --- TLS / HTTPS: not used (no HTTPS server, no HTTPS client) ---
+CONFIG_MBEDTLS_TLS_CLIENT=n
+CONFIG_MBEDTLS_TLS_SERVER=n
+CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=n
+CONFIG_ESP_WIFI_MBEDTLS_TLS_CLIENT=n
+
+# --- LwIP: drop IPv6 (we only need IPv4 on the local network) ---
+CONFIG_LWIP_IPV6=n
+
+# --- DHCPS: shrink (used only briefly during SoftAP setup) ---
+CONFIG_LWIP_DHCPS_MAX_STATION_NUM=2
+CONFIG_LWIP_DHCPS_STATIC_ENTRIES=n

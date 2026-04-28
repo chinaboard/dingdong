@@ -1,0 +1,1136 @@
+<!doctype html>
+<html lang='en'>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>dingdong</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#08090A;
+  --surface:#0F1011;
+  --surface-2:#16171B;
+  --border:rgba(255,255,255,.06);
+  --border-strong:rgba(255,255,255,.12);
+  --t1:#E6E6E7;
+  --t2:#8A8F98;
+  --t3:#5C616A;
+  --accent:#8B98E6;
+  --accent-bg:rgba(139,152,230,.08);
+  --success:#4CB782;
+  --success-bg:rgba(76,183,130,.10);
+  --warning:#F1A45A;
+  --warning-bg:rgba(241,164,90,.10);
+  --danger:#E85F5F;
+  --danger-bg:rgba(232,95,95,.10);
+  --r:6px;
+  --r-lg:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  font-family:-apple-system,'Inter',system-ui,sans-serif;
+  font-size:13px;line-height:1.5;
+  background:var(--bg);color:var(--t1);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+.mono{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums}
+button,input,select{font-family:inherit;font-size:13px;color:var(--t1)}
+a{color:var(--accent);text-decoration:none}
+
+.app{display:flex;flex-direction:column;height:100vh}
+.topbar{display:flex;align-items:center;gap:12px;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--bg);min-height:46px;flex-shrink:0}
+.brand{font-weight:600;letter-spacing:-.01em;color:var(--t1);font-size:14px}
+.brand .v{color:var(--t3);font-weight:400;margin-left:6px;font-size:11px}
+.topbar .grow{flex:1}
+.topbar .meta{color:var(--t2);font-size:12px}
+.topbar .meta .sep{color:var(--t3);margin:0 8px}
+.langsel{background:transparent;border:1px solid var(--border-strong);border-radius:var(--r);color:var(--t2);padding:3px 6px;font-size:11px;cursor:pointer}
+.langsel:hover{color:var(--t1)}
+
+.badge{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;font-size:11px;font-weight:500;border-radius:999px;border:1px solid transparent;letter-spacing:.01em}
+.badge.ok{color:var(--success);background:var(--success-bg);border-color:rgba(76,183,130,.20)}
+.badge.warn{color:var(--warning);background:var(--warning-bg);border-color:rgba(241,164,90,.20)}
+.badge .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+.body{flex:1;display:flex;overflow:hidden}
+.sidebar{width:200px;border-right:1px solid var(--border);padding:16px 10px;flex-shrink:0;background:var(--bg)}
+.navitem{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--r);color:var(--t2);cursor:pointer;font-size:13px;transition:background .12s,color .12s;user-select:none}
+.navitem:hover{color:var(--t1);background:var(--surface)}
+.navitem.active{color:var(--t1);background:var(--accent-bg);font-weight:500}
+
+.main{flex:1;overflow-y:auto;padding:24px 32px}
+.mainwrap{max-width:980px;margin:0 auto}
+
+.mobiletabs{display:none}
+@media (max-width:720px){
+  .topbar{padding:10px 14px}
+  .topbar .meta{display:none}
+  .sidebar{display:none}
+  .mobiletabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg);padding:0 4px;overflow-x:auto;flex-shrink:0}
+  .mobiletabs .navitem{border-radius:0;padding:10px 14px;border-bottom:2px solid transparent}
+  .mobiletabs .navitem.active{background:transparent;color:var(--t1);border-bottom-color:var(--accent)}
+  .main{padding:16px}
+}
+
+.ph{margin:0 0 24px}
+.ph h1{font-size:20px;margin:0 0 4px;font-weight:600;letter-spacing:-.01em}
+.ph .desc{color:var(--t2);font-size:13px}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px}
+.card + .card{margin-top:12px}
+.card .label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:10px;font-weight:500}
+.card h2{font-size:14px;margin:0 0 8px;font-weight:600;letter-spacing:-.01em}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px}
+.stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);font-weight:500}
+.stat .v{font-size:24px;margin-top:6px;font-weight:600;letter-spacing:-.02em}
+.stat .v .unit{font-size:12px;color:var(--t3);font-weight:400;margin-left:4px;letter-spacing:0}
+.stat .sub{font-size:11px;color:var(--t2);margin-top:4px}
+@media (max-width:560px){.stats{grid-template-columns:1fr 1fr}.stats .stat:nth-child(3){grid-column:span 2}}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:12px;font-weight:500;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:var(--r);color:var(--t1);cursor:pointer;transition:background .12s,border-color .12s}
+.btn:hover{background:#1F2026;border-color:rgba(255,255,255,.18)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#9AA6EE;border-color:#9AA6EE}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--t2)}
+.btn.ghost:hover{color:var(--t1);background:var(--surface)}
+.btn.danger{color:var(--danger);border-color:rgba(232,95,95,.30)}
+.btn.danger:hover{background:var(--danger-bg);border-color:var(--danger)}
+.btn.sm{padding:4px 8px;font-size:11px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+.input,select.input{background:var(--bg);border:1px solid var(--border-strong);border-radius:var(--r);padding:6px 10px;color:var(--t1);outline:none;transition:border-color .12s;font-size:13px}
+.input:focus{border-color:var(--accent)}
+.input::placeholder{color:var(--t3)}
+
+.form{display:flex;flex-direction:column;gap:10px}
+.form label{font-size:12px;color:var(--t2);display:flex;flex-direction:column;gap:4px}
+
+.row{display:flex;gap:8px;align-items:center}
+.row.between{justify-content:space-between}
+.grow{flex:1}
+
+table{width:100%;border-collapse:collapse;font-size:12px}
+table th{text-align:left;font-weight:500;color:var(--t3);padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+table td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--t1)}
+table tr:last-child td{border-bottom:0}
+table tr:hover td{background:var(--surface-2)}
+.t-mute{color:var(--t2)}
+.t-pos{color:var(--success)}
+.t-neg{color:var(--danger)}
+.evtype{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:500;letter-spacing:.02em}
+.evtype.in{color:var(--success);background:var(--success-bg)}
+.evtype.out{color:var(--danger);background:var(--danger-bg)}
+.empty{color:var(--t3);text-align:center;padding:24px 12px;font-size:12px}
+
+.barwrap{height:4px;background:var(--bg);border-radius:99px;overflow:hidden;margin-top:8px}
+.bar{height:100%;background:var(--success);transition:width .3s,background .3s}
+.bar.warn{background:var(--warning)}
+.bar.full{background:var(--danger)}
+
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:12px}
+.kv dt{color:var(--t3);text-align:left}
+.kv dd{margin:0;color:var(--t1);text-align:right;font-variant-numeric:tabular-nums}
+
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:11px}
+.cal .h{color:var(--t3);text-align:center;padding:4px 0;font-weight:500}
+.calcell{aspect-ratio:1;border-radius:4px;background:var(--surface-2);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;border:1px solid transparent;transition:border-color .12s,background .12s}
+.calcell.has{background:rgba(139,152,230,.10);cursor:pointer}
+.calcell.has:hover{border-color:var(--accent)}
+.calcell .d{color:var(--t2);font-size:10px}
+.calcell .n{color:var(--t1);font-size:11px;font-weight:500;margin-top:1px}
+.calcell.has .n{color:var(--accent)}
+
+.passkey{font-family:ui-monospace,Menlo,monospace;font-size:32px;font-weight:600;letter-spacing:.16em;color:var(--accent);text-align:center;padding:12px;background:var(--bg);border-radius:var(--r);border:1px dashed var(--border-strong)}
+
+.otabar{height:4px;background:var(--bg);border-radius:99px;overflow:hidden;margin-top:8px}
+.otabar .fill{height:100%;background:var(--accent);transition:width .15s}
+
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:640px){.tiles{grid-template-columns:1fr 1fr}}
+@media (max-width:380px){.tiles{grid-template-columns:1fr}}
+.tile{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px}
+.tile .k{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);font-weight:500;margin-bottom:6px}
+.tile .v{font-size:16px;color:var(--t1);font-weight:600;line-height:1.25;letter-spacing:-.01em}
+.tile .v .u{font-size:11px;color:var(--t3);font-weight:400;margin-left:3px;letter-spacing:0}
+.tile .sub{font-size:11px;color:var(--t2);margin-top:3px;line-height:1.4}
+.tile .sub.mono{font-family:ui-monospace,Menlo,monospace}
+.tile .barwrap{margin-top:7px;height:3px}
+details>summary{list-style:none;cursor:pointer}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:'▸ ';color:var(--t3);transition:transform .12s;display:inline-block}
+details[open]>summary::before{content:'▾ '}
+</style>
+</head>
+<body>
+
+<div class=app>
+  <header class=topbar>
+    <div class=brand>dingdong<span class=v id=fwVer>?</span></div>
+    <div id=healthBadge class='badge'><span class=dot></span><span id=healthText>…</span></div>
+    <div class=grow></div>
+    <div class=meta>
+      <span class=mono id=clock>—</span>
+      <span class=sep>·</span>
+      <span class=mono id=devIp>—</span>
+    </div>
+    <select id=langSel class=langsel>
+      <option value=en>EN</option>
+      <option value=zh>中文</option>
+    </select>
+  </header>
+
+  <nav class=mobiletabs id=mobiletabs></nav>
+
+  <div class=body>
+    <aside class=sidebar id=sidebar></aside>
+    <main class=main><div class=mainwrap id=main>loading…</div></main>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+
+// ---------- i18n ----------
+// Single source of truth: I18N.en is authoritative; missing keys in another
+// language fall back to English (so adding a string can never break the UI).
+// Placeholders use {0} {1} … positional, replaced by t(key, ...args).
+const I18N = {
+  en: {
+    'nav.overview':'Overview', 'nav.attendance':'Attendance', 'nav.people':'People', 'nav.system':'System',
+    'health.healthy':'Healthy',
+    'issue.ble':'BLE', 'issue.wifi':'WiFi', 'issue.ntp':'NTP', 'issue.no_wifi':'No WiFi',
+    'common.loading':'loading…', 'common.failed':'Failed', 'common.failed_prefix':'Failed: ',
+    'common.save':'Save', 'common.refresh':'Refresh', 'common.cancel':'Cancel', 'common.ok':'OK',
+    'common.load_failed':'(load failed)',
+    'rel.s':'{0}s ago', 'rel.m':'{0}m ago', 'rel.h':'{0}h ago', 'rel.d':'{0}d ago',
+    'cal.weekdays':'Sun,Mon,Tue,Wed,Thu,Fri,Sat',
+
+    'setup.title':'Initial setup',
+    'setup.desc':'Set the admin password and WiFi credentials. The device will reboot into normal mode.',
+    'setup.admin':'Admin password', 'setup.admin_hint':'(≥ 8 chars)',
+    'setup.wifi_ssid':'WiFi SSID', 'setup.wifi_pass':'WiFi password',
+    'setup.save':'Save and restart',
+    'setup.saved':'Saved', 'setup.saved_desc':'Device restarting, please wait…',
+    'setup.restore_label':'Restore from backup', 'setup.restore_btn':'Import',
+    'setup.restore_pick':'Pick a JSON file',
+    'setup.restore_confirm':'Restore from backup? Device will reboot.',
+    'setup.uploading':'Uploading…',
+    'setup.restored':'✓ Restored, waiting for reboot…',
+
+    'login.title':'Log in',
+    'login.desc':'Enter admin password to access the console.',
+    'login.admin_ph':'Admin password',
+    'login.btn':'Log in',
+    'login.wrong':'Wrong password',
+
+    'overview.title':'Overview',
+    'overview.desc':"Device status and today's attendance.",
+    'overview.stat_on_site':'On site', 'overview.unit_people':'people',
+    'overview.active_workers':'{0} active workers',
+    'overview.stat_active':'Active today', 'overview.unit_sessions':'sessions',
+    'overview.in_out_events':'{0} in/out events',
+    'overview.stat_bonded':'Bonded', 'overview.unit_iphone':'iPhone',
+    'overview.of_workers':'of {0} workers',
+    'overview.today_label':"Today's check-ins",
+    'overview.cal_label':'Last 30 days',
+    'overview.res_label':'Device resources',
+    'overview.no_today':'No check-ins today',
+    'overview.col_worker':'Worker', 'overview.col_sessions':'Sessions',
+    'overview.col_total':'Total', 'overview.col_status':'Status',
+    'overview.on_site':'On site', 'overview.left':'Left',
+    'overview.disk':'Disk (LittleFS)',
+    'overview.events_file':'events.jsonl',
+    'overview.events_unit':'events',
+    'overview.ram_free':'RAM free',
+    'overview.uptime':'Uptime',
+    'overview.ble_name':'BLE name',
+    'overview.col_time':'Time', 'overview.col_type':'Type',
+    'overview.col_source':'Source',
+    'overview.no_events_day':'No events',
+
+    'attendance.title':'Attendance log',
+    'attendance.desc':'Raw event stream and paired sessions.',
+    'attendance.all_workers':'All workers',
+    'attendance.raw_view':'Raw view', 'attendance.sessions_view':'Sessions view',
+    'attendance.export_label':'Export / wipe',
+    'attendance.from':'From', 'attendance.to':'To',
+    'attendance.raw_csv':'Raw CSV', 'attendance.sessions_csv':'Sessions CSV', 'attendance.jsonl':'JSONL',
+    'attendance.wipe':'Wipe all events',
+    'attendance.wipe_confirm':'Wipe all events? This cannot be undone.',
+    'attendance.no_sessions':'No sessions',
+    'attendance.col_start':'Start', 'attendance.col_end':'End', 'attendance.col_duration':'Duration',
+    'attendance.no_events':'No events — IN fires when an iPhone enters range',
+    'attendance.col_note':'Note',
+
+    'people.title':'People / devices',
+    'people.desc':'Each worker is one iPhone. BLE pairing creates the entry; "Delete" removes the worker, its bond, and its history.',
+    'people.pairing_title':'BLE pairing',
+    'people.pairing_desc':'30s window. iPhone shows the same 6-digit code; verify and confirm.',
+    'people.start':'Start pairing',
+    'people.start_failed':'Failed to start pairing',
+    'people.window_closed':'Pairing window closed',
+    'people.numcmp_l1_html':'iPhone should show the <strong style="color:var(--t1)">same 6-digit number</strong>.',
+    'people.numcmp_l2_html':'If they match, tap <strong style="color:var(--t1)">Pair</strong> on the iPhone, then click below.',
+    'people.numcmp_match':'✓ Numbers match',
+    'people.confirmed':'Confirmed, waiting for iPhone to finish…',
+    'people.cancelled':'Cancelled',
+    'people.tap_html':'Tap <span class=mono style="color:var(--accent)">{0}</span> on your iPhone',
+    'people.after_connect':'After connecting, both this page and the iPhone will show a matching 6-digit number',
+    'people.remaining':'{0}s remaining',
+    'people.cancel_pair':'Cancel pairing',
+    'people.workers_title':'Workers',
+    'people.no_workers':'No workers yet — first BLE pairing creates one',
+    'people.name_ph':'name', 'people.cat_ph':'category',
+    'people.in':'+IN', 'people.out':'+OUT',
+    'people.deleted':'Deleted', 'people.delete':'Delete',
+    'people.note_prompt':'Note (optional)',
+    'people.delete_confirm':'Permanently delete this worker? Their BLE bond and all attendance records will also be removed. This cannot be undone.',
+    'people.bonded':'bonded', 'people.not_bonded':'not bonded',
+
+    'system.title':'System',
+    'system.desc':'Diagnostics, device name, firmware update, backup, danger zone.',
+    'system.diag_label':'Diagnostics',
+    'system.show_raw':'Show raw JSON',
+    'system.sync_ntp':'Sync NTP',
+    'system.logout':'Log out',
+    'system.timezone':'Timezone',
+    'system.dev_name_label':'BLE device name',
+    'system.dev_name_note':"* Renaming doesn't update already-paired iPhones; \"Forget This Device\" + re-pair to refresh",
+    'system.led_label':'Status LED',
+    'system.led_toggle':'Enable status LED',
+    'system.led_note':'* Turning off blanks the on-board pixel completely (heap warnings, pairing window, NTP state).',
+    'system.change_pw_label':'Change admin password',
+    'system.cur_pw':'Current password', 'system.new_pw':'New password (≥8 chars)', 'system.change':'Change',
+    'system.pw_required':'Current password + new password (≥8 chars) required',
+    'system.pw_changed':'Changed. Please log in again.',
+    'system.ota_label':'Firmware OTA',
+    'system.upload_flash':'Upload & flash',
+    'system.pick_bin':'Pick a .bin file',
+    'system.ota_confirm':'Upload {0} KB firmware and flash? Device auto-restarts when done.',
+    'system.ota_progress':'Uploading {0}% · {1} / {2} KB',
+    'system.ota_net_err':'Network error',
+    'system.backup_label':'Backup / restore',
+    'system.backup_note':'Backup contains the WiFi password and admin password hash — keep it secure.',
+    'system.download_backup':'Download backup JSON',
+    'system.danger_label':'Danger zone',
+    'system.restart':'Restart device', 'system.factory':'Factory reset',
+    'system.restart_confirm':'Confirm restart?',
+    'system.factory_confirm':'Factory reset wipes: admin password, WiFi, workers, all BLE bonds, all events. Cannot be undone. Continue?',
+    'system.reboot_title':'Device restarting…',
+    'system.reboot_waiting':'Waiting (30s+)',
+    'system.reboot_timeout':'Timeout — please refresh manually',
+
+    'diag.firmware':'Firmware', 'diag.idf':'IDF',
+    'diag.chip':'Chip', 'diag.rev':'rev', 'diag.cores':'core',
+    'diag.reset_reason':'Reset reason',
+    'diag.boot_runtime':'Boot / runtime', 'diag.boots':'boots',
+    'diag.total':'Total', 'diag.current':'Current',
+    'diag.ram':'RAM', 'diag.free':'free',
+    'diag.min_free':'All-time min', 'diag.largest':'Largest block',
+    'diag.disk':'Disk',
+    'diag.events_file':'events.jsonl',
+    'diag.ota_slot':'OTA slot', 'diag.next':'Next →',
+    'diag.foot':'Retain {0} days / cap {1} · {2} events · {3} workers',
+  },
+  zh: {
+    'nav.overview':'总览', 'nav.attendance':'考勤', 'nav.people':'人员', 'nav.system':'系统',
+    'health.healthy':'运行正常',
+    'issue.ble':'蓝牙', 'issue.wifi':'WiFi', 'issue.ntp':'时间', 'issue.no_wifi':'未配置 WiFi',
+    'common.loading':'加载中…', 'common.failed':'失败', 'common.failed_prefix':'失败:',
+    'common.save':'保存', 'common.refresh':'刷新', 'common.cancel':'取消', 'common.ok':'确定',
+    'common.load_failed':'(加载失败)',
+    'rel.s':'{0} 秒前', 'rel.m':'{0} 分钟前', 'rel.h':'{0} 小时前', 'rel.d':'{0} 天前',
+    'cal.weekdays':'日,一,二,三,四,五,六',
+
+    'setup.title':'首次配置',
+    'setup.desc':'设置管理员密码和 WiFi。完成后设备会重启进入正常模式。',
+    'setup.admin':'管理员密码', 'setup.admin_hint':'(至少 8 位)',
+    'setup.wifi_ssid':'WiFi 名称', 'setup.wifi_pass':'WiFi 密码',
+    'setup.save':'保存并重启',
+    'setup.saved':'已保存', 'setup.saved_desc':'设备重启中,请稍候…',
+    'setup.restore_label':'从备份恢复', 'setup.restore_btn':'导入',
+    'setup.restore_pick':'请选择 JSON 文件',
+    'setup.restore_confirm':'确认从备份恢复?设备将重启。',
+    'setup.uploading':'上传中…',
+    'setup.restored':'✓ 已恢复,等待重启…',
+
+    'login.title':'登录',
+    'login.desc':'输入管理员密码以进入控制台。',
+    'login.admin_ph':'管理员密码',
+    'login.btn':'登录',
+    'login.wrong':'密码错误',
+
+    'overview.title':'总览',
+    'overview.desc':'设备状态与今日考勤。',
+    'overview.stat_on_site':'在场', 'overview.unit_people':'人',
+    'overview.active_workers':'共 {0} 名员工活跃',
+    'overview.stat_active':'今日活跃', 'overview.unit_sessions':'次',
+    'overview.in_out_events':'{0} 条进/出记录',
+    'overview.stat_bonded':'已配对', 'overview.unit_iphone':'部',
+    'overview.of_workers':'/ 共 {0} 名员工',
+    'overview.today_label':'今日打卡',
+    'overview.cal_label':'最近 30 天',
+    'overview.res_label':'设备资源',
+    'overview.no_today':'今日还没有打卡',
+    'overview.col_worker':'员工', 'overview.col_sessions':'次数',
+    'overview.col_total':'总时长', 'overview.col_status':'状态',
+    'overview.on_site':'在场', 'overview.left':'已离开',
+    'overview.disk':'磁盘 (LittleFS)',
+    'overview.events_file':'events.jsonl',
+    'overview.events_unit':'条',
+    'overview.ram_free':'剩余内存',
+    'overview.uptime':'运行时长',
+    'overview.ble_name':'BLE 名称',
+    'overview.col_time':'时间', 'overview.col_type':'类型',
+    'overview.col_source':'来源',
+    'overview.no_events_day':'当日无事件',
+
+    'attendance.title':'考勤日志',
+    'attendance.desc':'原始事件流与配对后的会话记录。',
+    'attendance.all_workers':'全部员工',
+    'attendance.raw_view':'原始视图', 'attendance.sessions_view':'会话视图',
+    'attendance.export_label':'导出 / 清空',
+    'attendance.from':'起', 'attendance.to':'止',
+    'attendance.raw_csv':'原始 CSV', 'attendance.sessions_csv':'会话 CSV', 'attendance.jsonl':'JSONL',
+    'attendance.wipe':'清空所有事件',
+    'attendance.wipe_confirm':'确认清空所有事件?该操作不可撤销。',
+    'attendance.no_sessions':'暂无会话',
+    'attendance.col_start':'开始', 'attendance.col_end':'结束', 'attendance.col_duration':'时长',
+    'attendance.no_events':'暂无事件 — iPhone 进入识别范围时会自动生成 IN',
+    'attendance.col_note':'备注',
+
+    'people.title':'人员 / 设备',
+    'people.desc':'每个员工对应一部 iPhone。BLE 配对后会自动创建条目;"删除"会同时移除员工、配对绑定与全部历史记录。',
+    'people.pairing_title':'BLE 配对',
+    'people.pairing_desc':'窗口时长 30 秒。iPhone 会显示同样的 6 位数字,确认匹配后点击确认。',
+    'people.start':'开始配对',
+    'people.start_failed':'启动配对失败',
+    'people.window_closed':'配对窗口已关闭',
+    'people.numcmp_l1_html':'iPhone 应该显示<strong style="color:var(--t1)">相同的 6 位数字</strong>。',
+    'people.numcmp_l2_html':'如果数字一致,先在 iPhone 上点击 <strong style="color:var(--t1)">配对</strong>,然后点下方按钮。',
+    'people.numcmp_match':'✓ 数字一致',
+    'people.confirmed':'已确认,等待 iPhone 完成…',
+    'people.cancelled':'已取消',
+    'people.tap_html':'请在 iPhone 上点击 <span class=mono style="color:var(--accent)">{0}</span>',
+    'people.after_connect':'连接后,本页和 iPhone 上会显示相同的 6 位数字',
+    'people.remaining':'剩余 {0} 秒',
+    'people.cancel_pair':'取消配对',
+    'people.workers_title':'员工',
+    'people.no_workers':'暂无员工 — 首次 BLE 配对会自动创建',
+    'people.name_ph':'姓名', 'people.cat_ph':'分组',
+    'people.in':'+上班', 'people.out':'+下班',
+    'people.deleted':'已删除', 'people.delete':'删除',
+    'people.note_prompt':'备注 (可选)',
+    'people.delete_confirm':'确认永久删除该员工?其 BLE 配对与全部考勤记录会一并清除,操作不可撤销。',
+    'people.bonded':'已配对', 'people.not_bonded':'未配对',
+
+    'system.title':'系统',
+    'system.desc':'诊断信息、设备名、固件升级、备份与危险操作。',
+    'system.diag_label':'诊断信息',
+    'system.show_raw':'查看原始 JSON',
+    'system.sync_ntp':'同步时间',
+    'system.logout':'退出登录',
+    'system.timezone':'时区',
+    'system.dev_name_label':'BLE 设备名',
+    'system.dev_name_note':'* 改名不会影响已配对的 iPhone;请先在 iPhone 上"忽略此设备"再重新配对',
+    'system.led_label':'状态 LED',
+    'system.led_toggle':'启用状态 LED',
+    'system.led_note':'* 关闭后板载像素灯完全熄灭(不会再显示堆告警、配对窗口、NTP 状态等)。',
+    'system.change_pw_label':'修改管理员密码',
+    'system.cur_pw':'当前密码', 'system.new_pw':'新密码 (≥8 位)', 'system.change':'修改',
+    'system.pw_required':'需要填写当前密码 + 新密码 (≥8 位)',
+    'system.pw_changed':'已修改,请重新登录。',
+    'system.ota_label':'固件 OTA',
+    'system.upload_flash':'上传并烧录',
+    'system.pick_bin':'请选择 .bin 文件',
+    'system.ota_confirm':'上传 {0} KB 固件并烧录?完成后会自动重启。',
+    'system.ota_progress':'上传中 {0}% · {1} / {2} KB',
+    'system.ota_net_err':'网络错误',
+    'system.backup_label':'备份 / 恢复',
+    'system.backup_note':'备份包含 WiFi 密码与管理员密码哈希,请妥善保管。',
+    'system.download_backup':'下载备份 JSON',
+    'system.danger_label':'危险操作',
+    'system.restart':'重启设备', 'system.factory':'恢复出厂',
+    'system.restart_confirm':'确认重启?',
+    'system.factory_confirm':'恢复出厂会清除:管理员密码、WiFi 配置、员工列表、全部 BLE 配对、全部事件。不可撤销,继续吗?',
+    'system.reboot_title':'设备重启中…',
+    'system.reboot_waiting':'等待中 (30 秒以上)',
+    'system.reboot_timeout':'超时 — 请手动刷新页面',
+
+    'diag.firmware':'固件', 'diag.idf':'IDF',
+    'diag.chip':'芯片', 'diag.rev':'版本', 'diag.cores':'核',
+    'diag.reset_reason':'复位原因',
+    'diag.boot_runtime':'启动 / 运行', 'diag.boots':'次启动',
+    'diag.total':'累计', 'diag.current':'本次',
+    'diag.ram':'内存', 'diag.free':'空闲',
+    'diag.min_free':'历史最低', 'diag.largest':'最大可用块',
+    'diag.disk':'磁盘',
+    'diag.events_file':'events.jsonl',
+    'diag.ota_slot':'OTA 分区', 'diag.next':'下次 →',
+    'diag.foot':'保留 {0} 天 / 上限 {1} · {2} 条事件 · {3} 名员工',
+  },
+};
+function pickLang(){
+  const stored=localStorage.getItem('dd_lang');
+  if(stored && I18N[stored]) return stored;
+  const nav=(navigator.language||'en').toLowerCase();
+  if(nav.startsWith('zh')) return 'zh';
+  return 'en';
+}
+let LANG=pickLang();
+document.documentElement.lang = LANG==='zh' ? 'zh-CN' : 'en';
+function t(key, ...args){
+  const dict=I18N[LANG]||I18N.en;
+  let s = dict[key];
+  if(s===undefined) s = I18N.en[key];
+  if(s===undefined) return key;  // missing key surfaces visibly in dev
+  for(let i=0;i<args.length;i++) s = s.replace(new RegExp('\\{'+i+'\\}','g'), args[i]);
+  return s;
+}
+
+const NAV=[
+  {id:'overview',k:'nav.overview'},
+  {id:'attendance',k:'nav.attendance'},
+  {id:'people',k:'nav.people'},
+  {id:'system',k:'nav.system'},
+];
+let state={view:'overview',workers:[],workersById:{},pairedMode:false,authed:false,setupMode:false,status:null};
+
+function renderNav(host,active){
+  host.innerHTML='';
+  for(const n of NAV){
+    const el=document.createElement('div');
+    el.className='navitem'+(n.id===active?' active':'');
+    el.textContent=t(n.k);
+    el.onclick=()=>{state.view=n.id;localStorage.setItem('dd_view',n.id);render();};
+    host.appendChild(el);
+  }
+}
+
+function fmtBytes(n){if(!n||n<0)return '–';
+  if(n<1024)return n+' B';
+  if(n<1048576)return (n/1024).toFixed(1)+' KB';
+  return (n/1048576).toFixed(2)+' MB';}
+function fmtDur(s){if(!s&&s!==0)return '-';
+  const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),ss=Math.floor(s%60);
+  if(d>0)return `${d}d ${h}h`;if(h>0)return `${h}h ${m}m`;if(m>0)return `${m}m ${ss}s`;return ss+'s';}
+function fmtTs(t){if(!t)return '-';const d=new Date(t*1000);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
+function fmtTime(ts){if(!ts)return '-';const d=new Date(ts*1000);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
+function fmtRel(ts){if(!ts)return '-';const s=Math.floor(Date.now()/1000)-ts;
+  if(s<60)return t('rel.s',s);
+  if(s<3600)return t('rel.m',Math.floor(s/60));
+  if(s<86400)return t('rel.h',Math.floor(s/3600));
+  if(s<604800)return t('rel.d',Math.floor(s/86400));
+  return fmtTs(ts);}
+function escAttr(s){return String(s||'').replace(/'/g,'&apos;').replace(/</g,'&lt;')}
+
+const _origFetch=window.fetch.bind(window);
+window.fetch=async(url,opts)=>{
+  const r=await _origFetch(url,opts);
+  if(r.status===401 && typeof url==='string' && !url.startsWith('/api/auth/')){
+    if(state.authed){state.authed=false;render();}
+  }
+  return r;
+};
+
+async function refreshStatus(){
+  const r=await fetch('/api/system/status').then(r=>r.json()).catch(()=>null);
+  if(!r)return null;
+  if(r.version)$('fwVer').textContent='v'+r.version;
+  $('devIp').textContent=r.ip||'—';
+  if(r.now_unix){const d=new Date(r.now_unix*1000);
+    $('clock').textContent=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;}
+  const issues=[];
+  if(!r.ble_advertising)issues.push(t('issue.ble'));
+  if(!(r.wifi==='AP'||r.wifi==='STA_GOT_IP'))issues.push(t('issue.wifi'));
+  if(!r.ntp_synced&&r.wifi==='STA_GOT_IP')issues.push(t('issue.ntp'));
+  if(r.has_admin&&!r.has_wifi_creds)issues.push(t('issue.no_wifi'));
+  const b=$('healthBadge');
+  if(issues.length===0){b.className='badge ok';$('healthText').textContent=t('health.healthy');}
+  else{b.className='badge warn';$('healthText').textContent=issues.join(', ');}
+  state.status=r;
+  state.setupMode=!r.has_admin||!r.has_wifi_creds;
+  return r;
+}
+
+async function refreshAuth(){
+  if(state.setupMode)return false;
+  const r=await fetch('/api/auth/me');
+  state.authed=r.ok;
+  return r.ok;
+}
+
+async function init(){
+  $('langSel').value=LANG;
+  $('langSel').onchange=()=>{
+    LANG=$('langSel').value;
+    localStorage.setItem('dd_lang',LANG);
+    document.documentElement.lang = LANG==='zh' ? 'zh-CN' : 'en';
+    refreshStatus().then(render);
+  };
+  const v=localStorage.getItem('dd_view');
+  if(v&&NAV.find(n=>n.id===v))state.view=v;
+  await refreshStatus();
+  await refreshAuth();
+  render();
+  setInterval(async()=>{await refreshStatus();
+    if(state.view==='overview'&&state.authed)refreshOverviewLite();
+  },5000);
+}
+
+function render(){
+  renderNav($('sidebar'),state.view);
+  renderNav($('mobiletabs'),state.view);
+  if(state.setupMode){renderSetup();return;}
+  if(!state.authed){renderLogin();return;}
+  if(state.view==='overview')renderOverview();
+  else if(state.view==='attendance')renderAttendance();
+  else if(state.view==='people')renderPeople();
+  else if(state.view==='system')renderSystem();
+}
+
+function renderSetup(){
+  const m=$('main');
+  m.innerHTML=`
+    <div class=ph><h1>${t('setup.title')}</h1><div class=desc>${t('setup.desc')}</div></div>
+    <div class=card style='max-width:420px'>
+      <form class=form id=setupF>
+        <label>${t('setup.admin')} <span class=mono style='color:var(--t3)'>${t('setup.admin_hint')}</span>
+          <input class=input name=admin_password type=password minlength=8 required></label>
+        <label>${t('setup.wifi_ssid')}
+          <input class=input name=wifi_ssid required></label>
+        <label>${t('setup.wifi_pass')}
+          <input class=input name=wifi_password type=password></label>
+        <div class=row style='margin-top:6px'>
+          <button class='btn primary'>${t('setup.save')}</button>
+          <span class=t-neg id=msg></span>
+        </div>
+      </form>
+    </div>
+    <div class=card style='max-width:420px'>
+      <div class=label>${t('setup.restore_label')}</div>
+      <div class=row>
+        <input type=file id=restoreFile accept='.json' class=input>
+        <button class=btn id=restoreB>${t('setup.restore_btn')}</button>
+      </div>
+      <div class='mono t-mute' id=restoreMsg style='margin-top:8px;font-size:11px'></div>
+    </div>`;
+  $('setupF').onsubmit=async e=>{e.preventDefault();
+    const fd=Object.fromEntries(new FormData(e.target));
+    const r=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(fd)});
+    if(r.ok){m.innerHTML=`<div class=ph><h1>${t('setup.saved')}</h1><div class=desc>${t('setup.saved_desc')}</div></div>`;waitForReboot();}
+    else $('msg').textContent=t('common.failed_prefix')+' '+await r.text();
+  };
+  $('restoreB').onclick=async()=>{
+    const f=$('restoreFile').files[0];if(!f){alert(t('setup.restore_pick'));return;}
+    if(!confirm(t('setup.restore_confirm')))return;
+    $('restoreMsg').textContent=t('setup.uploading');
+    const txt=await f.text();
+    const r=await fetch('/api/system/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:txt});
+    $('restoreMsg').textContent=r.ok?t('setup.restored'):(t('common.failed_prefix')+' '+await r.text());
+    if(r.ok)waitForReboot();
+  };
+}
+
+function renderLogin(){
+  $('main').innerHTML=`
+    <div class=ph><h1>${t('login.title')}</h1><div class=desc>${t('login.desc')}</div></div>
+    <div class=card style='max-width:340px'>
+      <form class=form id=loginF>
+        <input class=input name=password type=password placeholder='${t('login.admin_ph')}' required autofocus>
+        <div class=row style='margin-top:6px'>
+          <button class='btn primary'>${t('login.btn')}</button>
+          <span class=t-neg id=msg></span>
+        </div>
+      </form>
+    </div>`;
+  $('loginF').onsubmit=async e=>{e.preventDefault();
+    const fd=Object.fromEntries(new FormData(e.target));
+    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(fd)});
+    if(r.ok){state.authed=true;render();}else $('msg').textContent=t('login.wrong');
+  };
+}
+
+async function renderOverview(){
+  $('main').innerHTML=`
+    <div class=ph><h1>${t('overview.title')}</h1><div class=desc>${t('overview.desc')}</div></div>
+    <div class=stats id=statsRow>
+      <div class=stat><div class=k>${t('overview.stat_on_site')}</div><div class=v>—</div><div class=sub>—</div></div>
+      <div class=stat><div class=k>${t('overview.stat_active')}</div><div class=v>—</div><div class=sub>—</div></div>
+      <div class=stat><div class=k>${t('overview.stat_bonded')}</div><div class=v>—</div><div class=sub>—</div></div>
+    </div>
+    <div class=card><div class=label>${t('overview.today_label')}</div><div id=todayList class=empty>${t('common.loading')}</div></div>
+    <div class=card><div class=label>${t('overview.cal_label')}</div><div id=calBox class=empty>${t('common.loading')}</div></div>
+    <div class=card><div class=label>${t('overview.res_label')}</div><div id=resBox></div></div>`;
+  await loadOverview();
+}
+
+async function refreshOverviewLite(){
+  const s=state.status||{};
+  const box=$('resBox');if(!box)return;
+  renderResBox(box,s);
+}
+
+function renderResBox(box,s){
+  const used=s.fs_used||0,total=s.fs_total||1;
+  const pct=Math.round(used*100/total);
+  const barCls=pct>90?' full':(pct>70?' warn':'');
+  box.innerHTML=`
+    <dl class=kv>
+      <dt>${t('overview.disk')}</dt><dd class=mono>${fmtBytes(used)} / ${fmtBytes(total)} (${pct}%)</dd>
+    </dl>
+    <div class=barwrap><div class='bar${barCls}' style='width:${pct}%'></div></div>
+    <dl class=kv style='margin-top:14px'>
+      <dt>${t('overview.events_file')}</dt><dd class=mono>${fmtBytes(s.events_bytes)} · ${s.events_count||0} ${t('overview.events_unit')}</dd>
+      <dt>${t('overview.ram_free')}</dt><dd class=mono>${fmtBytes(s.heap_free)}</dd>
+      <dt>${t('overview.uptime')}</dt><dd class=mono>${fmtDur(s.uptime_s)}</dd>
+      <dt>${t('overview.ble_name')}</dt><dd class=mono>${s.ble||'-'}</dd>
+    </dl>`;
+}
+
+async function loadOverview(){
+  const s=state.status||{};
+  renderResBox($('resBox'),s);
+
+  const wr=await fetch('/api/workers').then(r=>r.json()).catch(()=>({workers:[]}));
+  state.workers=wr.workers||[];
+  state.workersById={};state.workers.forEach(w=>state.workersById[w.id]=w);
+
+  const td=await fetch('/api/today').then(r=>r.json()).catch(()=>null);
+  if(td){
+    const ws=td.workers||[];
+    const inNow=ws.filter(w=>w.currently_in).length;
+    const totalSegs=ws.reduce((a,w)=>a+w.segments,0);
+    const bondsR=await fetch('/api/bonds').then(r=>r.json()).catch(()=>({count:0}));
+    $('statsRow').innerHTML=`
+      <div class=stat><div class=k>${t('overview.stat_on_site')}</div><div class=v>${inNow}<span class=unit>${t('overview.unit_people')}</span></div><div class=sub>${t('overview.active_workers',ws.length)}</div></div>
+      <div class=stat><div class=k>${t('overview.stat_active')}</div><div class=v>${totalSegs}<span class=unit>${t('overview.unit_sessions')}</span></div><div class=sub>${t('overview.in_out_events',ws.reduce((a,w)=>a+w.segments*2,0))}</div></div>
+      <div class=stat><div class=k>${t('overview.stat_bonded')}</div><div class=v>${bondsR.count}<span class=unit>${t('overview.unit_iphone')}</span></div><div class=sub>${t('overview.of_workers',state.workers.length)}</div></div>`;
+    if(ws.length===0){$('todayList').innerHTML=`<div class=empty>${t('overview.no_today')}</div>`;}
+    else{
+      $('todayList').innerHTML=`<table>
+        <thead><tr><th>${t('overview.col_worker')}</th><th>${t('overview.col_sessions')}</th><th>${t('overview.col_total')}</th><th>${t('overview.col_status')}</th></tr></thead>
+        <tbody>${ws.map(w=>`<tr>
+          <td>${escAttr(w.name||('id='+w.worker_id))}${w.category?` <span class=t-mute>· ${escAttr(w.category)}</span>`:''}</td>
+          <td>${w.segments}</td>
+          <td class=mono>${fmtDur(w.total_seconds)}</td>
+          <td>${w.currently_in?`<span class=t-pos>${t('overview.on_site')}</span>`:`<span class=t-mute>${t('overview.left')}</span>`}</td>
+        </tr>`).join('')}</tbody></table>`;
+    }
+  }
+
+  const cd=await fetch('/api/calendar?days=30').then(r=>r.json()).catch(()=>null);
+  if(cd){
+    const buckets={};(cd.buckets||[]).forEach(b=>buckets[b.date_unix]=b);
+    const dayMs=86400000,fromMs=cd.from_unix*1000;
+    const wkdays=t('cal.weekdays').split(',');
+    let h='<div class=cal>'+wkdays.map(d=>`<div class=h>${d}</div>`).join('');
+    const startWkd=new Date(fromMs).getDay();
+    for(let i=0;i<startWkd;i++)h+='<div></div>';
+    for(let i=0;i<cd.days;i++){
+      const dt=new Date(fromMs+i*dayMs);
+      const localMid=Math.floor(new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()).getTime()/1000);
+      const b=buckets[localMid],ev=b?b.events:0;
+      const ds=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+      h+=`<div class='calcell${ev>0?' has':''}' data-date='${ds}'>
+        <div class=d>${dt.getDate()}</div><div class=n>${ev||''}</div></div>`;
+    }
+    h+='</div><div id=calDay style="margin-top:14px"></div>';
+    $('calBox').innerHTML=h;
+    document.querySelectorAll('.calcell.has').forEach(c=>c.onclick=()=>loadCalDay(c.dataset.date));
+  }
+}
+
+async function loadCalDay(date){
+  const box=$('calDay');
+  box.innerHTML=`<div class='mono t-mute' style='margin-bottom:6px'>${date}</div>`;
+  const r=await fetch('/api/events?date='+encodeURIComponent(date)).then(r=>r.json()).catch(()=>null);
+  if(!r){box.innerHTML+=`<div class=empty>${t('common.load_failed')}</div>`;return;}
+  const evs=(r.events||[]).slice().reverse();
+  if(evs.length===0){box.innerHTML+=`<div class=empty>${t('overview.no_events_day')}</div>`;return;}
+  box.innerHTML+=`<table><thead><tr><th>${t('overview.col_time')}</th><th>${t('overview.col_type')}</th><th>${t('overview.col_worker')}</th><th>${t('overview.col_source')}</th></tr></thead>
+    <tbody>${evs.map(e=>`<tr>
+      <td class=mono>${fmtTime(e.ts)}</td>
+      <td><span class='evtype ${e.type}'>${e.type}</span></td>
+      <td>${workerLabel(e)}</td>
+      <td class='mono t-mute'>${e.src}</td></tr>`).join('')}</tbody></table>`;
+}
+
+async function renderAttendance(){
+  $('main').innerHTML=`
+    <div class=ph><h1>${t('attendance.title')}</h1><div class=desc>${t('attendance.desc')}</div></div>
+    <div class=card>
+      <div class=row style='margin-bottom:12px;flex-wrap:wrap'>
+        <select class=input id=workerFilter style='min-width:140px'><option value=''>${t('attendance.all_workers')}</option></select>
+        <button class=btn id=pairToggle>${state.pairedMode?t('attendance.raw_view'):t('attendance.sessions_view')}</button>
+        <div class=grow></div>
+        <button class='btn ghost' id=refreshEvB>${t('common.refresh')}</button>
+      </div>
+      <div id=eventsList class=empty>${t('common.loading')}</div>
+    </div>
+    <div class=card>
+      <div class=label>${t('attendance.export_label')}</div>
+      <div class=row style='margin-bottom:8px;flex-wrap:wrap'>
+        <span class='mono t-mute'>${t('attendance.from')}</span>
+        <input id=expFrom type=date class=input style='max-width:160px'>
+        <span class='mono t-mute'>${t('attendance.to')}</span>
+        <input id=expTo type=date class=input style='max-width:160px'>
+      </div>
+      <div class=row style='flex-wrap:wrap'>
+        <button class=btn id=expRawCsv>${t('attendance.raw_csv')}</button>
+        <button class='btn primary' id=expPairCsv>${t('attendance.sessions_csv')}</button>
+        <button class='btn ghost' id=expJsonl>${t('attendance.jsonl')}</button>
+        <div class=grow></div>
+        <button class='btn danger' id=wipeB>${t('attendance.wipe')}</button>
+      </div>
+    </div>`;
+
+  if(state.workers.length===0){
+    const r=await fetch('/api/workers').then(r=>r.json()).catch(()=>({workers:[]}));
+    state.workers=r.workers||[];
+    state.workersById={};state.workers.forEach(w=>state.workersById[w.id]=w);
+  }
+  const wf=$('workerFilter');
+  wf.innerHTML=`<option value="">${t('attendance.all_workers')}</option>`+
+    state.workers.map(w=>`<option value=${w.id}>${escAttr(w.name)} (id=${w.id})</option>`).join('');
+  wf.onchange=loadEvents;
+  $('pairToggle').onclick=()=>{state.pairedMode=!state.pairedMode;renderAttendance();};
+  $('refreshEvB').onclick=loadEvents;
+  $('wipeB').onclick=async()=>{if(!confirm(t('attendance.wipe_confirm')))return;
+    await fetch('/api/events/wipe',{method:'POST'});loadEvents();};
+
+  function expUrl(fmt,mode){const f=$('expFrom').value,tt=$('expTo').value;
+    let q='format='+fmt;if(mode)q+='&mode='+mode;
+    if(f)q+='&from='+f;if(tt)q+='&to='+tt;return '/api/events/export?'+q;}
+  $('expRawCsv').onclick=()=>location=expUrl('csv');
+  $('expPairCsv').onclick=()=>location=expUrl('csv','paired');
+  $('expJsonl').onclick=()=>location=expUrl('jsonl');
+
+  loadEvents();
+}
+
+async function loadEvents(){
+  const wid=$('workerFilter')?.value||'';
+  const url=state.pairedMode?'/api/events/paired':'/api/events?limit=50'+(wid?'&worker_id='+wid:'');
+  const r=await fetch(url).then(r=>r.json()).catch(()=>null);
+  if(!r){$('eventsList').innerHTML=`<div class=empty>${t('common.load_failed')}</div>`;return;}
+  if(state.pairedMode){
+    let segs=(r.segments||[]);
+    if(wid)segs=segs.filter(s=>s.worker_id==+wid);
+    segs=segs.slice(-50).reverse();
+    if(segs.length===0){$('eventsList').innerHTML=`<div class=empty>${t('attendance.no_sessions')}</div>`;return;}
+    $('eventsList').innerHTML=`<table><thead><tr><th>${t('overview.col_worker')}</th><th>${t('attendance.col_start')}</th><th>${t('attendance.col_end')}</th><th>${t('attendance.col_duration')}</th></tr></thead>
+      <tbody>${segs.map(s=>`<tr>
+        <td>${s.worker_id?escAttr(state.workersById[s.worker_id]?.name||('id='+s.worker_id)):'?'}</td>
+        <td class=mono>${fmtTs(s.in_ts)}</td>
+        <td class=mono>${s.open?`<span class=t-pos>${t('overview.on_site')}</span>`:fmtTs(s.out_ts)}</td>
+        <td class=mono>${s.open?'…':fmtDur(s.duration_s)}</td>
+      </tr>`).join('')}</tbody></table>`;
+  }else{
+    const evs=(r.events||[]).slice().reverse();
+    if(evs.length===0){$('eventsList').innerHTML=`<div class=empty>${t('attendance.no_events')}</div>`;return;}
+    $('eventsList').innerHTML=`<table><thead><tr><th>${t('overview.col_time')}</th><th>${t('overview.col_type')}</th><th>${t('overview.col_worker')}</th><th>${t('overview.col_source')}</th><th>${t('attendance.col_note')}</th></tr></thead>
+      <tbody>${evs.map(e=>`<tr>
+        <td class=mono title='${fmtTs(e.ts)}'>${fmtRel(e.ts)}</td>
+        <td><span class='evtype ${e.type}'>${e.type}</span></td>
+        <td>${workerLabel(e)}</td>
+        <td class='mono t-mute'>${e.src}</td>
+        <td class='mono t-mute'>${e.note?escAttr(e.note):''}</td>
+      </tr>`).join('')}</tbody></table>`;
+  }
+}
+
+function workerLabel(e){if(e.worker_id){return escAttr(state.workersById[e.worker_id]?.name||('id='+e.worker_id));}return e.peer||'-';}
+
+async function renderPeople(){
+  $('main').innerHTML=`
+    <div class=ph><h1>${t('people.title')}</h1><div class=desc>${t('people.desc')}</div></div>
+    <div class=card>
+      <div class='row between' style='margin-bottom:12px'>
+        <div><h2 style='margin:0'>${t('people.pairing_title')}</h2><div class='t-mute' style='font-size:12px;margin-top:2px'>${t('people.pairing_desc')}</div></div>
+        <button class='btn primary' id=pairB>${t('people.start')}</button>
+      </div>
+      <div id=pairBox></div>
+    </div>
+    <div class=card>
+      <div class='row between' style='margin-bottom:12px'>
+        <h2 style='margin:0'>${t('people.workers_title')} (<span id=workersCount>0</span>)</h2>
+      </div>
+      <div id=workersList class=empty>${t('common.loading')}</div>
+    </div>`;
+  $('pairB').onclick=async()=>{
+    const r=await fetch('/api/pairing/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ttl_ms:30000})});
+    if(!r.ok){alert(t('people.start_failed'));return;}
+    pollPair();
+  };
+  loadWorkers();
+}
+
+function pollPair(){
+  const box=$('pairBox');
+  let confirming=false;
+  const tick=async()=>{
+    if(confirming){setTimeout(tick,500);return;}
+    const s=await fetch('/api/pairing/status').then(r=>r.json()).catch(()=>({active:false}));
+    if(!s.active){box.innerHTML=`<div class="t-mute" style="font-size:12px;margin-top:8px">${t('people.window_closed')}</div>`;loadWorkers();return;}
+    const sec=Math.ceil(s.remaining_ms/1000);
+    const dev=state.status?.ble||'dingdong-XXXX';
+    if(s.numcmp&&s.numcmp>0){
+      box.innerHTML=`<div class=passkey>${String(s.numcmp).padStart(6,'0')}</div>
+        <div class='t-mute' style='font-size:12px;text-align:center;margin-top:10px'>
+          ${t('people.numcmp_l1_html')}<br>
+          ${t('people.numcmp_l2_html')}
+        </div>
+        <div class=row style='justify-content:center;gap:8px;margin-top:12px'>
+          <button class='btn primary' id=ncOkB>${t('people.numcmp_match')}</button>
+          <button class='btn ghost sm' id=ncNoB>${t('common.cancel')}</button>
+        </div>`;
+      $('ncOkB').onclick=async()=>{confirming=true;
+        await fetch('/api/pairing/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accept:true})});
+        box.innerHTML=`<div class="t-mute" style="font-size:12px;margin-top:8px">${t('people.confirmed')}</div>`;
+        confirming=false;setTimeout(tick,1500);};
+      $('ncNoB').onclick=async()=>{confirming=true;
+        await fetch('/api/pairing/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accept:false})});
+        await fetch('/api/pairing/cancel',{method:'POST'});
+        box.innerHTML=`<div class="t-mute" style="font-size:12px;margin-top:8px">${t('people.cancelled')}</div>`;};
+    }else{
+      box.innerHTML=`<div style='text-align:center;padding:18px 0'>
+        <div style='font-size:14px;color:var(--t1)'>${t('people.tap_html',dev)}</div>
+        <div class='t-mute' style='font-size:12px;margin-top:8px'>${t('people.after_connect')}</div>
+        <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('people.remaining',sec)}</div>
+      </div>
+      <div class=row style='justify-content:center;margin-top:8px'>
+        <button class='btn ghost sm' id=cancelB>${t('people.cancel_pair')}</button>
+      </div>`;
+      $('cancelB').onclick=async()=>{await fetch('/api/pairing/cancel',{method:'POST'});box.innerHTML='';};
+    }
+    setTimeout(tick,1000);
+  };
+  tick();
+}
+
+async function loadWorkers(){
+  const a=document.activeElement;
+  if(a?.tagName==='INPUT'&&a.dataset?.id)return;
+  const r=await fetch('/api/workers').then(r=>r.json()).catch(()=>({workers:[]}));
+  state.workers=r.workers||[];
+  state.workersById={};state.workers.forEach(w=>state.workersById[w.id]=w);
+  if($('workersCount'))$('workersCount').textContent=state.workers.length;
+  const box=$('workersList');if(!box)return;
+  if(state.workers.length===0){box.innerHTML=`<div class=empty>${t('people.no_workers')}</div>`;return;}
+  box.innerHTML=state.workers.map(w=>`
+    <div style='padding:10px 0;border-bottom:1px solid var(--border)' data-w=${w.id}>
+      <div class=row style='flex-wrap:wrap'>
+        <input class=input data-id=${w.id} data-field=name value='${escAttr(w.name)}' placeholder='${t('people.name_ph')}' style='flex:1;min-width:120px'>
+        <input class=input data-id=${w.id} data-field=category value='${escAttr(w.category)}' placeholder='${t('people.cat_ph')}' style='max-width:100px'>
+        <button class='btn sm saveW' data-id=${w.id}>${t('common.save')}</button>
+        <button class='btn sm punchW' data-id=${w.id} data-type=in style='color:var(--success);border-color:rgba(76,183,130,.30)'>${t('people.in')}</button>
+        <button class='btn sm punchW' data-id=${w.id} data-type=out style='color:var(--danger);border-color:rgba(232,95,95,.30)'>${t('people.out')}</button>
+        ${w.revoked?`<span class=t-mute style="font-size:11px">${t('people.deleted')}</span>`:`<button class='btn sm danger revokeW' data-id=${w.id}>${t('people.delete')}</button>`}
+      </div>
+      <div class='mono t-mute' style='font-size:11px;margin-top:4px'>id=${w.id} · ${w.addr} · ${w.bonded?`<span class=t-pos>${t('people.bonded')}</span>`:`<span class=t-mute>${t('people.not_bonded')}</span>`}</div>
+    </div>`).join('');
+  document.querySelectorAll('.saveW').forEach(b=>b.onclick=async()=>{
+    const id=+b.dataset.id;
+    const inputs=document.querySelectorAll(`input[data-id='${id}']`);
+    const body={id};inputs.forEach(i=>body[i.dataset.field]=i.value);
+    const r=await fetch('/api/workers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.ok){b.textContent='✓';setTimeout(()=>b.textContent=t('common.save'),1000);}else alert(t('common.failed'));});
+  document.querySelectorAll('.punchW').forEach(b=>b.onclick=async()=>{
+    const id=+b.dataset.id,type=b.dataset.type;
+    const note=prompt(t('people.note_prompt'),'')||'';
+    const r=await fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({worker_id:id,type,note:note||'web manual'})});
+    if(r.ok){b.textContent='✓';setTimeout(()=>b.textContent=type==='in'?t('people.in'):t('people.out'),900);}else alert(t('common.failed'));});
+  document.querySelectorAll('.revokeW').forEach(b=>b.onclick=async()=>{
+    if(!confirm(t('people.delete_confirm')))return;
+    await fetch('/api/workers/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:+b.dataset.id})});
+    loadWorkers();});
+}
+
+function renderSystem(){
+  $('main').innerHTML=`
+    <div class=ph><h1>${t('system.title')}</h1><div class=desc>${t('system.desc')}</div></div>
+    <div class=card>
+      <div class=label>${t('system.diag_label')}</div>
+      <div id=diagTiles class=tiles>${t('common.loading')}</div>
+      <div id=diagFoot class='t-mute' style='font-size:11px;margin-top:10px'></div>
+      <details style='margin-top:10px'>
+        <summary class='t-mute' style='font-size:11px'>${t('system.show_raw')}</summary>
+        <pre id=diagRaw class=mono style='background:var(--bg);padding:10px;border-radius:var(--r);overflow:auto;max-height:240px;font-size:11px;color:var(--t2);margin:8px 0 0'></pre>
+      </details>
+      <div class=row style='margin-top:12px'>
+        <button class='btn ghost' id=diagRefresh>${t('common.refresh')}</button>
+        <button class='btn ghost' id=ntpResync>${t('system.sync_ntp')}</button>
+        <div class=grow></div>
+        <button class='btn ghost' id=logoutB>${t('system.logout')}</button>
+      </div>
+    </div>
+    <div class=card>
+      <div class=label>${t('system.led_label')}</div>
+      <label class=row style='gap:8px;cursor:pointer;user-select:none'>
+        <input type=checkbox id=ledToggle disabled>
+        <span>${t('system.led_toggle')}</span>
+      </label>
+      <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.led_note')}</div>
+    </div>
+    <div class=card>
+      <div class=label>${t('system.dev_name_label')}</div>
+      <div class=row>
+        <input class=input id=nameInput placeholder='dingdong-XXXX' maxlength=18 style='flex:1'>
+        <button class=btn id=nameSaveB>${t('common.save')}</button>
+      </div>
+      <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.dev_name_note')}</div>
+    </div>
+    <div class=card>
+      <div class=label>${t('system.change_pw_label')}</div>
+      <div class=row>
+        <input class=input id=oldPw type=password placeholder='${t('system.cur_pw')}' style='flex:1'>
+        <input class=input id=newPw type=password placeholder='${t('system.new_pw')}' style='flex:1'>
+        <button class=btn id=changePwB>${t('system.change')}</button>
+      </div>
+    </div>
+    <div class=card>
+      <div class=label>${t('system.ota_label')}</div>
+      <div class=row>
+        <input type=file id=otaFile accept='.bin' class=input style='flex:1'>
+        <button class='btn primary' id=otaB>${t('system.upload_flash')}</button>
+      </div>
+      <div id=otaProgress class='mono t-mute' style='font-size:11px;margin-top:8px'></div>
+      <div class=otabar style='display:none' id=otaBarWrap><div class=fill id=otaBar></div></div>
+    </div>
+    <div class=card>
+      <div class=label>${t('system.backup_label')}</div>
+      <div class='t-mute' style='font-size:11px;margin-bottom:8px'>${t('system.backup_note')}</div>
+      <a href='/api/system/backup' download><button class=btn>${t('system.download_backup')}</button></a>
+    </div>
+    <div class=card>
+      <div class=label>${t('system.danger_label')}</div>
+      <div class=row>
+        <button class='btn danger' id=restartB>${t('system.restart')}</button>
+        <button class='btn danger' id=factoryB>${t('system.factory')}</button>
+      </div>
+    </div>`;
+  loadDiag();
+  fetch('/api/system/device_name').then(r=>r.json()).then(d=>{$('nameInput').value=d.name||'';});
+  fetch('/api/system/led').then(r=>r.json()).then(d=>{
+    const cb=$('ledToggle');if(!cb)return;
+    cb.checked=!!d.enabled; cb.disabled=false;
+    cb.onchange=async()=>{
+      cb.disabled=true;
+      const r=await fetch('/api/system/led',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:cb.checked})});
+      cb.disabled=false;
+      if(!r.ok){cb.checked=!cb.checked;alert(t('common.failed'));}
+    };
+  });
+  $('diagRefresh').onclick=loadDiag;
+  $('ntpResync').onclick=async e=>{await fetch('/api/system/time_resync',{method:'POST'});
+    e.target.textContent='✓';setTimeout(()=>e.target.textContent=t('system.sync_ntp'),1500);};
+  $('logoutB').onclick=async()=>{await fetch('/api/auth/logout',{method:'POST'});state.authed=false;render();};
+  $('nameSaveB').onclick=async e=>{
+    const name=$('nameInput').value.trim();if(!name)return;
+    const r=await fetch('/api/system/device_name',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+    if(r.ok){e.target.textContent='✓';setTimeout(()=>e.target.textContent=t('common.save'),1000);}
+    else alert(t('common.failed_prefix')+' '+await r.text());};
+  $('changePwB').onclick=async()=>{
+    const o=$('oldPw').value,n=$('newPw').value;
+    if(!o||n.length<8){alert(t('system.pw_required'));return;}
+    const r=await fetch('/api/auth/change_password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({old_password:o,new_password:n})});
+    if(r.ok){alert(t('system.pw_changed'));await fetch('/api/auth/logout',{method:'POST'});state.authed=false;render();}
+    else alert(t('common.failed_prefix')+' '+await r.text());};
+  $('restartB').onclick=async()=>{if(!confirm(t('system.restart_confirm')))return;
+    await fetch('/api/system/restart',{method:'POST'});waitForReboot();};
+  $('factoryB').onclick=async()=>{
+    if(!confirm(t('system.factory_confirm')))return;
+    const r=await fetch('/api/system/factory_reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:'FACTORY_RESET'})});
+    if(r.ok)waitForReboot();else alert(t('common.failed_prefix')+' '+await r.text());};
+  $('otaB').onclick=async()=>{
+    const f=$('otaFile').files[0];if(!f){alert(t('system.pick_bin'));return;}
+    if(!confirm(t('system.ota_confirm',(f.size/1024).toFixed(0))))return;
+    $('otaB').disabled=true;
+    $('otaBarWrap').style.display='block';
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST','/api/system/ota');xhr.setRequestHeader('Content-Type','application/octet-stream');
+    xhr.upload.onprogress=e=>{
+      if(e.lengthComputable){const pct=Math.floor(e.loaded*100/e.total);
+        $('otaBar').style.width=pct+'%';
+        $('otaProgress').textContent=t('system.ota_progress',pct,(e.loaded/1024).toFixed(0),(e.total/1024).toFixed(0));}
+    };
+    xhr.onload=()=>{const ok=xhr.status>=200&&xhr.status<300;
+      $('otaProgress').textContent=ok?'✓ '+xhr.responseText:t('common.failed_prefix')+' '+xhr.status+': '+xhr.responseText;
+      if(ok)waitForReboot();$('otaB').disabled=false;};
+    xhr.onerror=()=>{$('otaProgress').textContent=t('system.ota_net_err');$('otaB').disabled=false;};
+    xhr.send(f);
+  };
+}
+
+async function loadDiag(){
+  const r=await fetch('/api/system/diag').then(r=>r.json()).catch(()=>null);
+  if(!r){$('diagTiles').innerHTML=`<div class=empty>${t('common.load_failed')}</div>`;return;}
+  const fw=r.firmware||{},chip=r.chip||{},heap=r.heap||{},fs=r.fs||{},m=r.metrics||{},ota=r.ota||{};
+  const fsPct=fs.total?Math.round((fs.used||0)*100/fs.total):0;
+  const fsCls=fsPct>90?'full':(fsPct>70?'warn':'');
+  $('diagTiles').innerHTML=`
+    <div class=tile>
+      <div class=k>${t('diag.firmware')}</div>
+      <div class=v>v${fw.version||'?'}</div>
+      <div class=sub>${t('diag.idf')} ${fw.idf_ver||'?'}</div>
+      <div class='sub mono'>${fw.compile_date||''} ${fw.compile_time||''}</div>
+    </div>
+    <div class=tile>
+      <div class=k>${t('diag.chip')}</div>
+      <div class=v>${chip.model||'?'}</div>
+      <div class=sub>${t('diag.rev')} ${chip.rev_major||0}.${chip.rev_minor||0} · ${chip.cores||0} ${t('diag.cores')}</div>
+      <div class=sub>${t('diag.reset_reason')} <span class=mono>${r.reset_reason||'-'}</span></div>
+    </div>
+    <div class=tile>
+      <div class=k>${t('diag.boot_runtime')}</div>
+      <div class=v>${m.boot_count||0}<span class=u>${t('diag.boots')}</span></div>
+      <div class=sub>${t('diag.total')} ${fmtDur(m.total_uptime_s||0)}</div>
+      <div class=sub>${t('diag.current')} ${fmtDur(r.uptime_s||0)}</div>
+    </div>
+    <div class=tile>
+      <div class=k>${t('diag.ram')}</div>
+      <div class=v>${fmtBytes(heap.free)}<span class=u>${t('diag.free')}</span></div>
+      <div class=sub>${t('diag.min_free')} ${fmtBytes(heap.min_free)}</div>
+      <div class=sub>${t('diag.largest')} ${fmtBytes(heap.largest_free)}</div>
+    </div>
+    <div class=tile>
+      <div class=k>${t('diag.disk')}</div>
+      <div class=v>${fmtBytes(fs.used)}<span class=u>/ ${fmtBytes(fs.total)}</span></div>
+      <div class=barwrap><div class='bar ${fsCls}' style='width:${fsPct}%'></div></div>
+      <div class=sub>${t('diag.events_file')} ${fmtBytes(fs.events_file_bytes)}</div>
+    </div>
+    <div class=tile>
+      <div class=k>${t('diag.ota_slot')}</div>
+      <div class='v mono'>${ota.running||'?'}</div>
+      <div class='sub mono'>${t('diag.next')} ${ota.next||'?'}</div>
+    </div>`;
+  $('diagFoot').innerHTML=t('diag.foot',
+    r.events_retention?.retention_days||0,
+    fmtBytes(r.events_retention?.max_bytes_cap||0),
+    r.events_count||0,
+    r.workers_count||0);
+  $('diagRaw').textContent=JSON.stringify(r,null,2);
+}
+
+function waitForReboot(){
+  const m=$('main');
+  m.innerHTML=`<div class=ph><h1>${t('system.reboot_title')}</h1><div class=desc>${t('system.reboot_waiting')}</div></div>`;
+  let n=0;
+  const iv=setInterval(async()=>{n++;
+    try{const r=await fetch('/api/system/status',{cache:'no-store'});
+      if(r.ok){clearInterval(iv);await refreshStatus();await refreshAuth();render();}}catch(_){}
+    if(n>120){clearInterval(iv);m.innerHTML+=`<div class=t-neg>${t('system.reboot_timeout')}</div>`;}
+  },2500);
+}
+
+init();
+</script>
+</body>
+</html>
