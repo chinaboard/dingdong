@@ -149,6 +149,21 @@ static esp_err_t favicon_get(httpd_req_t *req)
     return ESP_OK;
 }
 
+// Captive-portal catch-all: any unknown path → 302 to "/". Combined with the
+// captive_portal DNS hijack, this triggers iOS / Android / Windows network
+// connectivity probes (captive.apple.com/hotspot-detect.html,
+// connectivitycheck.gstatic.com/generate_204, etc.) to pop the OS's mini
+// browser pointed at the setup page. Harmless in STA mode (any 404 there
+// just becomes a redirect to a valid page).
+static esp_err_t not_found_redirect(httpd_req_t *req, httpd_err_code_t err)
+{
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_hdr(req, "Location", "/");
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_send(req, "redirect", HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
 // ---------- start/stop ----------
 
 esp_err_t dd_http_start(void)
@@ -211,6 +226,7 @@ esp_err_t dd_http_start(void)
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); ++i) {
         ESP_ERROR_CHECK(httpd_register_uri_handler(s_server, &routes[i]));
     }
+    httpd_register_err_handler(s_server, HTTPD_404_NOT_FOUND, not_found_redirect);
 
     ESP_LOGI(TAG, "HTTP server listening on :80 (%d routes)",
              (int)(sizeof(routes) / sizeof(routes[0])));

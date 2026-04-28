@@ -12,6 +12,7 @@
 #include "lwip/ip4_addr.h"
 
 #include "dd_config.h"
+#include "dd_captive.h"
 
 static const char *TAG = "wifi";
 
@@ -86,6 +87,8 @@ static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *da
             wifi_config_t wc;
             esp_wifi_get_config(WIFI_IF_AP, &wc);
             ESP_LOGI(TAG, "SoftAP up: ssid=%s gw=" IPSTR, (char *)wc.ap.ssid, IP2STR(&ip.gw));
+            // Captive portal: DNS hijack so phones auto-pop the setup page.
+            dd_captive_start(ip.gw.addr);
             s_state = DD_WIFI_STATE_AP;
             break;
         }
