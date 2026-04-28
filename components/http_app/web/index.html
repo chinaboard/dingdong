@@ -92,16 +92,22 @@ body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;pa
   .mobiletabs .navitem.active{background:transparent;color:var(--t1);border-bottom-color:var(--accent)}
   .main{padding:16px}
   .card{padding:14px 12px}
-  /* Wide tables on narrow phones: scroll horizontally inside the card
-     instead of overflowing into the whole page. display:block on a table
-     turns it into a generic block that respects overflow. */
-  .card > table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
-  .card > table thead, .card > table tbody, .card > table tr{width:max-content;min-width:100%}
+  /* Wide tables on narrow phones: scroll horizontally inside their wrapper
+     instead of overflowing into the whole page. Tables are nested in
+     <div id=todayList|eventsList|calDay> etc. — descendant selector matches
+     all of them. display:block turns the table into a generic block that
+     respects overflow. */
+  .card table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
+  .card table thead, .card table tbody, .card table tr{width:max-content;min-width:100%}
   /* IP / MAC / hostnames in kv dd's mustn't push the column off-screen. */
   .kv dd{word-break:break-all}
   /* Long-running input + button rows (worker edit, change pw, OTA, etc.)
      wrap by default so nothing ends up half-clipped. */
   .card .row{flex-wrap:wrap}
+  /* iOS Safari auto-zooms when a tapped input is smaller than 16px,
+     producing a jarring "page shifted" sensation. Bump inputs to 16px on
+     mobile to prevent it. */
+  .input,select.input{font-size:16px}
 }
 @media (max-width:420px){
   .topbar{padding:8px 10px;gap:8px}
