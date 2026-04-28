@@ -93,12 +93,10 @@ body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;pa
   .main{padding:16px}
   .card{padding:14px 12px}
   /* Wide tables on narrow phones: scroll horizontally inside their wrapper
-     instead of overflowing into the whole page. Tables are nested in
-     <div id=todayList|eventsList|calDay> etc. — descendant selector matches
-     all of them. display:block turns the table into a generic block that
-     respects overflow. */
-  .card table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
-  .card table thead, .card table tbody, .card table tr{width:max-content;min-width:100%}
+     div instead of overflowing into the page. Tables themselves stay real
+     tables (so column alignment between rows survives) — only the wrapper
+     gets overflow-x:auto. */
+  #eventsList,#todayList,#calDay{overflow-x:auto;-webkit-overflow-scrolling:touch}
   /* IP / MAC / hostnames in kv dd's mustn't push the column off-screen. */
   .kv dd{word-break:break-all}
   /* Long-running input + button rows (worker edit, change pw, OTA, etc.)
@@ -119,6 +117,11 @@ body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;pa
 }
 @media (max-width:420px){
   .topbar{padding:8px 10px;gap:8px}
+  /* Version string can be long ("0.6.1+20260428.1746" or
+     "0.6.1-3-gabc1234-dirty") — push it offscreen rather than have it
+     fight badge + lang switcher for the topbar. Available in /diag if
+     anyone needs it from a phone. */
+  .brand .v{display:none}
   /* Health badge worst-case "BLE, WiFi, NTP, No WiFi" can push the lang
      switcher off-screen. Cap + ellipsis instead. */
   #healthBadge{max-width:140px;min-width:0}
