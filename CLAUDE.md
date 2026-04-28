@@ -92,6 +92,8 @@ A separate FreeRTOS task watches GPIO9 (BOOT button); a 5-second long-press call
 
 In SoftAP modes the Web UI is the first-run wizard; in STA mode it's the admin console. STA mode auto-restarts the device after 10 minutes of continuous disconnection (`STA_GIVE_UP_MS` in `dd_wifi.c`) so a transient AP outage doesn't strand the device.
 
+Once STA gets an IP, the device advertises itself via mDNS as `dingdong-XXXX.local` (same `XXXX` as the BLE name and SoftAP SSID — last 2 bytes of the BT MAC). Reachable from any modern OS without hunting through the router DHCP table. Hostname is MAC-derived rather than tracking the user-renamed BLE display name, so bookmarks survive renames.
+
 ## Presence detection (the core architecture)
 
 The attendance signal is **not** driven by HID connect/disconnect events — that approach was unreliable because iOS controls reconnection cadence and can take minutes to wake. Instead:

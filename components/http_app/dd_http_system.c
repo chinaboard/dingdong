@@ -123,6 +123,16 @@ esp_err_t status_get(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "uptime_s", esp_timer_get_time() / 1000000);
     cJSON_AddNumberToObject(j, "heap_free", (double)esp_get_free_heap_size());
 
+    // mDNS hostname so the UI (and the setup-saved screen) can show users
+    // a stable URL for after-reboot access. Always BT-MAC-derived; doesn't
+    // track the user-changeable BLE display name.
+    {
+        uint8_t mac[6]; esp_read_mac(mac, ESP_MAC_BT);
+        char host[24];
+        snprintf(host, sizeof(host), "dingdong-%02x%02x", mac[4], mac[5]);
+        cJSON_AddStringToObject(j, "mdns_host", host);
+    }
+
     // Firmware version on the public status — useful in the header pre-login.
     const esp_app_desc_t *desc = esp_app_get_description();
     if (desc) cJSON_AddStringToObject(j, "version", desc->version);

@@ -13,6 +13,7 @@
 
 #include "dd_config.h"
 #include "dd_captive.h"
+#include "mdns.h"
 
 static const char *TAG = "wifi";
 
@@ -35,6 +36,30 @@ static esp_netif_t *s_netif_ap  = NULL;
 static int s_sta_retry = 0;
 static int64_t s_sta_down_since_us = 0;
 static esp_timer_handle_t s_sta_giveup_timer = NULL;
+static bool s_mdns_started = false;
+
+// Bring up mDNS so the device is reachable via http://dingdong-XXXX.local
+// from any modern OS, no router-DHCP-table hunting needed. Idempotent —
+// safe across STA reconnects. Hostname is BT-MAC-derived (matches the BLE
+// name + SoftAP SSID suffix) so it stays stable across BLE display-name
+// renames; bookmarks survive.
+static void mdns_bring_up(void)
+{
+    if (s_mdns_started) return;
+    if (mdns_init() != ESP_OK) {
+        ESP_LOGW(TAG, "mdns_init failed");
+        return;
+    }
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_BT);
+    char host[24];
+    snprintf(host, sizeof(host), "dingdong-%02x%02x", mac[4], mac[5]);
+    mdns_hostname_set(host);
+    mdns_instance_name_set("Dingdong");
+    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+    s_mdns_started = true;
+    ESP_LOGI(TAG, "mDNS up: http://%s.local", host);
+}
 
 static void sta_giveup_cb(void *arg)
 {
@@ -114,6 +139,7 @@ static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *da
         if (s_sta_giveup_timer) esp_timer_stop(s_sta_giveup_timer);
         s_state = DD_WIFI_STATE_STA_GOT_IP;
         ESP_LOGI(TAG, "STA got IP: " IPSTR, IP2STR(&e->ip_info.ip));
+        mdns_bring_up();
     }
 }
 

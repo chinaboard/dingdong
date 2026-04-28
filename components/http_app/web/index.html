@@ -234,6 +234,7 @@ const I18N = {
     'setup.wifi_ssid':'WiFi SSID', 'setup.wifi_pass':'WiFi password',
     'setup.save':'Save and restart',
     'setup.saved':'Saved', 'setup.saved_desc':'Device restarting, please wait…',
+    'setup.mdns_hint':'After restart, open <a id=mdnsLink>http://{0}.local</a> from any device on the same WiFi.',
     'setup.restore_label':'Restore from backup', 'setup.restore_btn':'Import',
     'setup.restore_pick':'Pick a JSON file',
     'setup.restore_confirm':'Restore from backup? Device will reboot.',
@@ -370,6 +371,7 @@ const I18N = {
     'setup.wifi_ssid':'WiFi 名称', 'setup.wifi_pass':'WiFi 密码',
     'setup.save':'保存并重启',
     'setup.saved':'已保存', 'setup.saved_desc':'设备重启中,请稍候…',
+    'setup.mdns_hint':'重启完成后,在同一 WiFi 下访问 <a id=mdnsLink>http://{0}.local</a> 即可',
     'setup.restore_label':'从备份恢复', 'setup.restore_btn':'导入',
     'setup.restore_pick':'请选择 JSON 文件',
     'setup.restore_confirm':'确认从备份恢复?设备将重启。',
@@ -646,7 +648,15 @@ function renderSetup(){
   $('setupF').onsubmit=async e=>{e.preventDefault();
     const fd=Object.fromEntries(new FormData(e.target));
     const r=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(fd)});
-    if(r.ok){m.innerHTML=`<div class=ph><h1>${t('setup.saved')}</h1><div class=desc>${t('setup.saved_desc')}</div></div>`;waitForReboot();}
+    if(r.ok){
+      const host=state.status?.mdns_host||'dingdong-XXXX';
+      m.innerHTML=`<div class=ph><h1>${t('setup.saved')}</h1>
+        <div class=desc>${t('setup.saved_desc')}</div>
+        <div class='t-mute' style='font-size:12px;margin-top:14px;text-align:center'>${t('setup.mdns_hint',host)}</div>
+      </div>`;
+      const link=$('mdnsLink');if(link)link.href='http://'+host+'.local';
+      waitForReboot();
+    }
     else $('msg').textContent=t('common.failed_prefix')+' '+await r.text();
   };
   $('restoreB').onclick=async()=>{
