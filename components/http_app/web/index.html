@@ -352,10 +352,7 @@ const I18N = {
     'people.start_failed':'Failed to start pairing',
     'people.window_closed':'Pairing window closed',
     'people.numcmp_l1_html':'iPhone should show the <strong style="color:var(--t1)">same 6-digit number</strong>.',
-    'people.numcmp_l2_html':'If they match, tap <strong style="color:var(--t1)">Pair</strong> on the iPhone, then click below.',
-    'people.numcmp_match':'✓ Numbers match',
-    'people.confirmed':'Confirmed, waiting for iPhone to finish…',
-    'people.cancelled':'Cancelled',
+    'people.numcmp_l2_html':'If they match, tap <strong style="color:var(--t1)">Pair</strong> on the iPhone — bonding completes automatically.',
     'people.tap_html':'Tap <span class=mono style="color:var(--accent)">{0}</span> on your iPhone',
     'people.after_connect':'After connecting, both this page and the iPhone will show a matching 6-digit number',
     'people.remaining':'{0}s remaining',
@@ -490,10 +487,7 @@ const I18N = {
     'people.start_failed':'启动配对失败',
     'people.window_closed':'配对窗口已关闭',
     'people.numcmp_l1_html':'iPhone 应该显示<strong style="color:var(--t1)">相同的 6 位数字</strong>。',
-    'people.numcmp_l2_html':'如果数字一致,先在 iPhone 上点击 <strong style="color:var(--t1)">配对</strong>,然后点下方按钮。',
-    'people.numcmp_match':'✓ 数字一致',
-    'people.confirmed':'已确认,等待 iPhone 完成…',
-    'people.cancelled':'已取消',
+    'people.numcmp_l2_html':'如果数字一致,在 iPhone 上点击 <strong style="color:var(--t1)">配对</strong> — 设备这边会自动完成绑定。',
     'people.tap_html':'请在 iPhone 上点击 <span class=mono style="color:var(--accent)">{0}</span>',
     'people.after_connect':'连接后,本页和 iPhone 上会显示相同的 6 位数字',
     'people.remaining':'剩余 {0} 秒',
@@ -983,18 +977,10 @@ function pollPair(){
           ${t('people.numcmp_l1_html')}<br>
           ${t('people.numcmp_l2_html')}
         </div>
-        <div class=row style='justify-content:center;gap:8px;margin-top:12px'>
-          <button class='btn primary' id=ncOkB>${t('people.numcmp_match')}</button>
-          <button class='btn ghost sm' id=ncNoB>${t('common.cancel')}</button>
+        <div class=row style='justify-content:center;margin-top:12px'>
+          <button class='btn ghost sm' id=cancelB>${t('people.cancel_pair')}</button>
         </div>`;
-      $('ncOkB').onclick=async()=>{confirming=true;
-        await fetch('/api/pairing/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accept:true})});
-        box.innerHTML=`<div class="t-mute" style="font-size:12px;margin-top:8px">${t('people.confirmed')}</div>`;
-        confirming=false;setTimeout(tick,1500);};
-      $('ncNoB').onclick=async()=>{confirming=true;
-        await fetch('/api/pairing/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accept:false})});
-        await fetch('/api/pairing/cancel',{method:'POST'});
-        box.innerHTML=`<div class="t-mute" style="font-size:12px;margin-top:8px">${t('people.cancelled')}</div>`;};
+      $('cancelB').onclick=async()=>{await fetch('/api/pairing/cancel',{method:'POST'});box.innerHTML='';};
     }else{
       box.innerHTML=`<div style='text-align:center;padding:18px 0'>
         <div style='font-size:14px;color:var(--t1)'>${t('people.tap_html',dev)}</div>

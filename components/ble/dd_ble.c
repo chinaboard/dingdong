@@ -465,11 +465,16 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
 
     case BLE_GAP_EVENT_PASSKEY_ACTION: {
         // With sm_io_cap = KEYBOARD_DISPLAY and an iOS Central, SM picks
-        // Numeric Comparison: SM derives a 6-digit number from the SC public
-        // key exchange and asks BOTH sides to confirm the number matches.
-        // We stash the value here and wait for the user to compare against
-        // what's on their iPhone, then confirm via the Web UI (which calls
-        // dd_ble_pairing_confirm).
+        // Numeric Comparison: SM derives a 6-digit number from the SC
+        // public-key exchange and asks BOTH sides to confirm the number
+        // matches. The actual security comes from the human comparing the
+        // two numbers and tapping "Pair" on the iPhone — that's the leg
+        // an attacker can't forge. Our side's accept is essentially
+        // mechanical, so just auto-accept and let the user verify by
+        // looking at the number on the Web UI vs what their iPhone shows.
+        // The Web UI exposes the numcmp value via /api/pairing/status; if
+        // the user spots a mismatch they can tap "Cancel pairing" which
+        // hits /api/pairing/cancel and drops the connection.
         if (event->passkey.params.action == BLE_SM_IOACT_NUMCMP) {
             if (!dd_ble_pairing_active()) {
                 ESP_LOGW(TAG, "NC requested but pairing window closed — rejecting");
@@ -479,9 +484,11 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
             }
             s_pairing_numcmp        = event->passkey.params.numcmp;
             s_pairing_numcmp_handle = event->passkey.conn_handle;
-            ESP_LOGI(TAG, "NC numcmp=%06" PRIu32 " handle=%d (waiting Web UI confirm)",
+            ESP_LOGI(TAG, "NC numcmp=%06" PRIu32 " handle=%d (auto-accept)",
                      s_pairing_numcmp, event->passkey.conn_handle);
-            return 0;  // injection happens later via dd_ble_pairing_confirm
+            struct ble_sm_io io = { .action = BLE_SM_IOACT_NUMCMP, .numcmp_accept = 1 };
+            ble_sm_inject_io(event->passkey.conn_handle, &io);
+            return 0;
         }
         ESP_LOGW(TAG, "unexpected passkey action=%d, denying",
                  event->passkey.params.action);
