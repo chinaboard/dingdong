@@ -360,6 +360,34 @@ esp_err_t presence_timeout_post(httpd_req_t *req)
     return reply_text(req, "200 OK", "ok");
 }
 
+// ---------- NTP server ----------
+
+esp_err_t ntp_server_get(httpd_req_t *req)
+{
+    if (require_auth(req) != ESP_OK) return ESP_OK;
+    cJSON *r = cJSON_CreateObject();
+    cJSON_AddStringToObject(r, "server", dd_time_get_ntp_server());
+    cJSON_AddBoolToObject  (r, "synced", dd_time_is_synced());
+    return reply_json_status(req, "200 OK", r);
+}
+
+esp_err_t ntp_server_post(httpd_req_t *req)
+{
+    if (require_auth(req) != ESP_OK) return ESP_OK;
+    cJSON *j = recv_json_body(req);
+    if (!j) return reply_text(req, "400 Bad Request", "bad json");
+    const cJSON *s = cJSON_GetObjectItem(j, "server");
+    if (!cJSON_IsString(s) || !s->valuestring[0]) {
+        cJSON_Delete(j);
+        return reply_text(req, "400 Bad Request", "server (string) required");
+    }
+    esp_err_t err = dd_time_set_ntp_server(s->valuestring);
+    cJSON_Delete(j);
+    if (err == ESP_ERR_INVALID_SIZE) return reply_text(req, "400 Bad Request", "server too long");
+    if (err != ESP_OK) return reply_text(req, "500 Internal Server Error", "save failed");
+    return reply_text(req, "200 OK", "ok, resyncing");
+}
+
 // ---------- backup / restore ----------
 //
 // Backup contains everything needed to recreate the device's logical state on

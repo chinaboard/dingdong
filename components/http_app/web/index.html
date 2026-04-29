@@ -240,6 +240,15 @@ details>summary{list-style:none;cursor:pointer}
 details>summary::-webkit-details-marker{display:none}
 details>summary::before{content:'▸ ';color:var(--t3);transition:transform .12s;display:inline-block}
 details[open]>summary::before{content:'▾ '}
+
+/* System tab section grouping. Replaces the old single-column wall-of-cards
+   with header-separated sections; small settings cards pair up two-per-row
+   on wide screens, stack on mobile. */
+.section{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);font-weight:600;margin:24px 4px 8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section:first-child{margin-top:0}
+.s-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:720px){.s-grid{grid-template-columns:1fr}}
+.s-grid > .card{margin-top:0}
 </style>
 </head>
 <body>
@@ -371,6 +380,14 @@ const I18N = {
     'system.title':'System',
     'system.desc':'Diagnostics, device name, firmware update, backup, danger zone.',
     'system.diag_label':'Diagnostics',
+    'system.section_settings':'Settings',
+    'system.section_maintenance':'Maintenance',
+    'system.section_diagnostics':'Diagnostics',
+    'system.section_danger':'Danger zone',
+    'system.ntp_label':'NTP server',
+    'system.ntp_synced':'Time is synced.',
+    'system.ntp_unsynced':'Not synced yet — check server reachability.',
+    'system.ntp_note':'* Hostname or IP. Must respond to NTP queries on UDP/123. Common picks: pool.ntp.org · time.cloudflare.com · time.apple.com · ntp.aliyun.com',
     'system.show_raw':'Show raw JSON',
     'system.sync_ntp':'Sync NTP',
     'system.logout':'Log out',
@@ -511,6 +528,14 @@ const I18N = {
     'system.title':'系统',
     'system.desc':'诊断信息、设备名、固件升级、备份与危险操作。',
     'system.diag_label':'诊断信息',
+    'system.section_settings':'设置',
+    'system.section_maintenance':'维护',
+    'system.section_diagnostics':'诊断',
+    'system.section_danger':'危险操作',
+    'system.ntp_label':'NTP 服务器',
+    'system.ntp_synced':'时间已同步。',
+    'system.ntp_unsynced':'尚未同步 — 检查服务器是否可达。',
+    'system.ntp_note':'* 域名或 IP。需要响应 UDP/123 上的 NTP 查询。常用:pool.ntp.org · time.cloudflare.com · time.apple.com · ntp.aliyun.com',
     'system.show_raw':'查看原始 JSON',
     'system.sync_ntp':'同步时间',
     'system.logout':'退出登录',
@@ -1055,35 +1080,27 @@ async function loadWorkers(){
 function renderSystem(){
   $('main').innerHTML=`
     <div class=ph><h1>${t('system.title')}</h1><div class=desc>${t('system.desc')}</div></div>
-    <div class=card>
-      <div class=label>${t('system.diag_label')}</div>
-      <div id=diagTiles class=tiles>${t('common.loading')}</div>
-      <div id=diagFoot class='t-mute' style='font-size:11px;margin-top:10px'></div>
-      <details style='margin-top:10px'>
-        <summary class='t-mute' style='font-size:11px'>${t('system.show_raw')}</summary>
-        <pre id=diagRaw class=mono style='background:var(--bg);padding:10px;border-radius:var(--r);overflow:auto;max-height:240px;font-size:11px;color:var(--t2);margin:8px 0 0'></pre>
-      </details>
-      <div class=row style='margin-top:12px'>
-        <button class='btn ghost' id=diagRefresh>${t('common.refresh')}</button>
-        <button class='btn ghost' id=ntpResync>${t('system.sync_ntp')}</button>
+
+    <div class=section>${t('system.section_settings')}</div>
+    <div class=s-grid>
+      <div class=card>
+        <div class=label>${t('system.led_label')}</div>
+        <label class=row style='gap:8px;cursor:pointer;user-select:none'>
+          <input type=checkbox id=ledToggle disabled>
+          <span>${t('system.led_toggle')}</span>
+        </label>
+        <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.led_note')}</div>
       </div>
-    </div>
-    <div class=card>
-      <div class=label>${t('system.led_label')}</div>
-      <label class=row style='gap:8px;cursor:pointer;user-select:none'>
-        <input type=checkbox id=ledToggle disabled>
-        <span>${t('system.led_toggle')}</span>
-      </label>
-      <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.led_note')}</div>
-    </div>
-    <div class=card>
-      <div class=label>${t('system.presence_label')}</div>
-      <div class=row>
-        <input class=input id=presenceTimeout type=number min=30 max=600 step=5 style='max-width:100px'>
-        <span class='t-mute' style='font-size:12px'>${t('system.presence_unit')}</span>
-        <button class=btn id=presenceSaveB>${t('common.save')}</button>
+      <div class=card>
+        <div class=label>${t('system.presence_label')}</div>
+        <div class=row>
+          <input class=input id=presenceTimeout type=number min=30 max=600 step=5 style='max-width:100px'>
+          <span class='t-mute' style='font-size:12px'>${t('system.presence_unit')}</span>
+          <div class=grow></div>
+          <button class=btn id=presenceSaveB>${t('common.save')}</button>
+        </div>
+        <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.presence_note')}</div>
       </div>
-      <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.presence_note')}</div>
     </div>
     <div class=card>
       <div class=label>${t('system.dev_name_label')}</div>
@@ -1101,6 +1118,8 @@ function renderSystem(){
         <button class=btn id=changePwB type=button style='align-self:flex-start'>${t('system.change')}</button>
       </form>
     </div>
+
+    <div class=section>${t('system.section_maintenance')}</div>
     <div class=card>
       <div class=label>${t('system.ota_label')}</div>
       <div class=row>
@@ -1110,13 +1129,49 @@ function renderSystem(){
       <div id=otaProgress class='mono t-mute' style='font-size:11px;margin-top:8px'></div>
       <div class=otabar style='display:none' id=otaBarWrap><div class=fill id=otaBar></div></div>
     </div>
-    <div class=card>
-      <div class=label>${t('system.backup_label')}</div>
-      <div class='t-mute' style='font-size:11px;margin-bottom:8px'>${t('system.backup_note')}</div>
-      <a href='/api/system/backup' download><button class=btn>${t('system.download_backup')}</button></a>
+    <div class=s-grid>
+      <div class=card>
+        <div class=label>${t('system.ntp_label')}</div>
+        <div class=row>
+          <input class=input id=ntpServer list=ntpServers placeholder='ntp.aliyun.com' style='flex:1'>
+          <datalist id=ntpServers>
+            <option value=ntp.aliyun.com>
+            <option value=ntp.tencent.com>
+            <option value=cn.pool.ntp.org>
+            <option value=pool.ntp.org>
+            <option value=time.cloudflare.com>
+            <option value=time.google.com>
+            <option value=time.apple.com>
+            <option value=time.windows.com>
+          </datalist>
+          <button class=btn id=ntpSaveB>${t('common.save')}</button>
+        </div>
+        <div class='t-mute' id=ntpStatus style='font-size:11px;margin-top:6px'></div>
+        <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.ntp_note')}</div>
+      </div>
+      <div class=card>
+        <div class=label>${t('system.backup_label')}</div>
+        <div class='t-mute' style='font-size:11px;margin-bottom:8px'>${t('system.backup_note')}</div>
+        <a href='/api/system/backup' download><button class=btn>${t('system.download_backup')}</button></a>
+      </div>
     </div>
+
+    <div class=section>${t('system.section_diagnostics')}</div>
     <div class=card>
-      <div class=label>${t('system.danger_label')}</div>
+      <div id=diagTiles class=tiles>${t('common.loading')}</div>
+      <div id=diagFoot class='t-mute' style='font-size:11px;margin-top:10px'></div>
+      <details style='margin-top:10px'>
+        <summary class='t-mute' style='font-size:11px'>${t('system.show_raw')}</summary>
+        <pre id=diagRaw class=mono style='background:var(--bg);padding:10px;border-radius:var(--r);overflow:auto;max-height:240px;font-size:11px;color:var(--t2);margin:8px 0 0'></pre>
+      </details>
+      <div class=row style='margin-top:12px'>
+        <button class='btn ghost' id=diagRefresh>${t('common.refresh')}</button>
+        <button class='btn ghost' id=ntpResync>${t('system.sync_ntp')}</button>
+      </div>
+    </div>
+
+    <div class=section>${t('system.section_danger')}</div>
+    <div class=card>
       <div class=row>
         <button class=btn id=restartB>${t('system.restart')}</button>
         <div class=grow></div>
@@ -1143,6 +1198,17 @@ function renderSystem(){
     const v=parseInt($('presenceTimeout').value,10);
     if(!(v>=30&&v<=600)){alert('30 - 600');return;}
     const r=await fetch('/api/system/presence_timeout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({timeout_s:v})});
+    if(r.ok){e.target.textContent='✓';setTimeout(()=>e.target.textContent=t('common.save'),1000);}
+    else alert(t('common.failed'));
+  };
+  fetch('/api/system/ntp_server').then(r=>r.json()).then(d=>{
+    if($('ntpServer'))$('ntpServer').value=d.server||'';
+    if($('ntpStatus'))$('ntpStatus').textContent=d.synced?t('system.ntp_synced'):t('system.ntp_unsynced');
+  });
+  $('ntpSaveB').onclick=async e=>{
+    const v=$('ntpServer').value.trim();
+    if(!v){alert(t('common.failed'));return;}
+    const r=await fetch('/api/system/ntp_server',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({server:v})});
     if(r.ok){e.target.textContent='✓';setTimeout(()=>e.target.textContent=t('common.save'),1000);}
     else alert(t('common.failed'));
   };
