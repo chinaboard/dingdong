@@ -620,14 +620,49 @@ esp_err_t diag_get(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "workers_count",  (double)dd_worker_count());
     cJSON_AddNumberToObject(j, "events_count",   (double)dd_storage_event_count());
 
+    // Per-slot view: walk both ota_0/ota_1, read each app_desc and report
+    // version + which one is running / which one OTA would write to next.
     const esp_partition_t *running = esp_ota_get_running_partition();
     const esp_partition_t *next    = esp_ota_get_next_update_partition(NULL);
-    if (running) {
-        cJSON *p = cJSON_CreateObject();
-        cJSON_AddStringToObject(p, "running", running->label);
-        if (next) cJSON_AddStringToObject(p, "next", next->label);
-        cJSON_AddItemToObject(j, "ota", p);
+    cJSON *ota = cJSON_CreateObject();
+    cJSON *slots = cJSON_CreateArray();
+    esp_partition_iterator_t it = esp_partition_find(
+        ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, NULL);
+    while (it) {
+        const esp_partition_t *p = esp_partition_get(it);
+        if (p->subtype >= ESP_PARTITION_SUBTYPE_APP_OTA_0 &&
+            p->subtype <= ESP_PARTITION_SUBTYPE_APP_OTA_15) {
+            cJSON *s = cJSON_CreateObject();
+            cJSON_AddStringToObject(s, "label", p->label);
+            cJSON_AddNumberToObject(s, "size", (double)p->size);
+            esp_app_desc_t pdesc;
+            if (esp_ota_get_partition_description(p, &pdesc) == ESP_OK) {
+                cJSON_AddStringToObject(s, "version", pdesc.version);
+            } else {
+                cJSON_AddStringToObject(s, "version", "");
+            }
+            esp_ota_img_states_t st;
+            if (esp_ota_get_state_partition(p, &st) == ESP_OK) {
+                const char *st_str =
+                    st == ESP_OTA_IMG_NEW            ? "new" :
+                    st == ESP_OTA_IMG_PENDING_VERIFY ? "pending_verify" :
+                    st == ESP_OTA_IMG_VALID          ? "valid" :
+                    st == ESP_OTA_IMG_INVALID        ? "invalid" :
+                    st == ESP_OTA_IMG_ABORTED        ? "aborted" :
+                    st == ESP_OTA_IMG_UNDEFINED      ? "undefined" : "?";
+                cJSON_AddStringToObject(s, "state", st_str);
+            }
+            cJSON_AddBoolToObject(s, "running", running && p == running);
+            cJSON_AddBoolToObject(s, "next",    next    && p == next);
+            cJSON_AddItemToArray(slots, s);
+        }
+        it = esp_partition_next(it);
     }
+    if (it) esp_partition_iterator_release(it);
+    cJSON_AddItemToObject(ota, "slots", slots);
+    if (running) cJSON_AddStringToObject(ota, "running", running->label);
+    if (next)    cJSON_AddStringToObject(ota, "next",    next->label);
+    cJSON_AddItemToObject(j, "ota", ota);
 
     return reply_json_status(req, "200 OK", j);
 }

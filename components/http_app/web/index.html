@@ -412,7 +412,7 @@ const I18N = {
     'diag.min_free':'All-time min', 'diag.largest':'Largest block',
     'diag.disk':'Disk',
     'diag.events_file':'events.jsonl',
-    'diag.ota_slot':'OTA slot', 'diag.next':'Next →',
+    'diag.ota_slot':'OTA slots', 'diag.running':'running', 'diag.next_slot':'next',
     'diag.foot':'Retain {0} days / cap {1} · {2} events · {3} workers',
   },
   zh: {
@@ -552,7 +552,7 @@ const I18N = {
     'diag.min_free':'历史最低', 'diag.largest':'最大可用块',
     'diag.disk':'磁盘',
     'diag.events_file':'events.jsonl',
-    'diag.ota_slot':'OTA 分区', 'diag.next':'下次 →',
+    'diag.ota_slot':'OTA 分区', 'diag.running':'运行中', 'diag.next_slot':'OTA 写这里',
     'diag.foot':'保留 {0} 天 / 上限 {1} · {2} 条事件 · {3} 名员工',
   },
 };
@@ -1225,8 +1225,14 @@ async function loadDiag(){
     </div>
     <div class=tile>
       <div class=k>${t('diag.ota_slot')}</div>
-      <div class='v mono'>${ota.running||'?'}</div>
-      <div class='sub mono'>${t('diag.next')} ${ota.next||'?'}</div>
+      ${(ota.slots||[]).map(s=>{
+        const tag = s.running?`<span class=t-pos style='font-size:10px'>● ${t('diag.running')}</span>`
+                  : s.next   ?`<span class=t-mute style='font-size:10px'>○ ${t('diag.next_slot')}</span>` : '';
+        return `<div class='sub mono' style='display:flex;justify-content:space-between;gap:8px'>
+          <span>${s.label} <span class=t-mute>${s.version||'—'}</span></span>
+          <span>${tag}</span>
+        </div>`;
+      }).join('')}
     </div>`;
   $('diagFoot').innerHTML=t('diag.foot',
     r.events_retention?.retention_days||0,
