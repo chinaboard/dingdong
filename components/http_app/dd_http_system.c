@@ -24,7 +24,6 @@
 #include "dd_ble.h"
 #include "dd_led.h"
 #include "dd_log.h"
-#include "dd_ota_pull.h"
 #include "dd_storage.h"
 #include "dd_time.h"
 #include "dd_wifi.h"
@@ -467,68 +466,6 @@ esp_err_t logs_clear_post(httpd_req_t *req)
     return reply_text(req, "200 OK", "ok");
 }
 
-// ---------- OTA pull from GitHub Releases ----------
-//
-// /api/system/ota_check — synchronous, returns the latest release JSON
-// /api/system/ota_pull  — async, kicks off background task that downloads
-//                          + verifies SHA256 + commits + restarts. Caller
-//                          should poll /api/system/status afterwards.
-
-esp_err_t ota_check_get(httpd_req_t *req)
-{
-    if (require_auth(req) != ESP_OK) return ESP_OK;
-    dd_ota_release_t r;
-    esp_err_t err = dd_ota_check(&r);
-    if (err != ESP_OK) {
-        return reply_text(req, "502 Bad Gateway", esp_err_to_name(err));
-    }
-    cJSON *j = cJSON_CreateObject();
-    cJSON_AddStringToObject(j, "tag",          r.tag);
-    cJSON_AddStringToObject(j, "published_at", r.published_at);
-    cJSON_AddStringToObject(j, "asset_name",   r.asset_name);
-    cJSON_AddStringToObject(j, "asset_url",    r.asset_url);
-    cJSON_AddStringToObject(j, "sha256",       r.sha256_hex);
-    cJSON_AddNumberToObject(j, "asset_bytes",  r.asset_bytes);
-    return reply_json_status(req, "200 OK", j);
-}
-
-static void ota_pull_task(void *arg)
-{
-    dd_ota_release_t *r = (dd_ota_release_t *)arg;
-    esp_err_t err = dd_ota_pull(r);
-    free(r);
-    if (err == ESP_OK) {
-        ESP_LOGW("ota_pull", "OTA pull succeeded — restarting in 2s");
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        esp_restart();
-    } else {
-        ESP_LOGE("ota_pull", "OTA pull failed: %s", esp_err_to_name(err));
-    }
-    vTaskDelete(NULL);
-}
-
-esp_err_t ota_pull_post(httpd_req_t *req)
-{
-    if (require_auth(req) != ESP_OK) return ESP_OK;
-
-    // Re-fetch the release JSON in this handler so the user can't pin a stale
-    // tag → URL → hash via the /ota_check response. The pull is then strictly
-    // tied to whatever GitHub serves now.
-    dd_ota_release_t *r = malloc(sizeof(*r));
-    if (!r) return reply_text(req, "500 Internal Server Error", "no mem");
-    esp_err_t err = dd_ota_check(r);
-    if (err != ESP_OK) {
-        free(r);
-        return reply_text(req, "502 Bad Gateway", esp_err_to_name(err));
-    }
-
-    BaseType_t ok = xTaskCreate(ota_pull_task, "ota_pull", 8192, r, 5, NULL);
-    if (ok != pdPASS) {
-        free(r);
-        return reply_text(req, "500 Internal Server Error", "task spawn failed");
-    }
-    return reply_text(req, "202 Accepted", "ok, pulling");
-}
 
 // ---------- backup / restore ----------
 //

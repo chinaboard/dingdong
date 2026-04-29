@@ -432,9 +432,6 @@ const I18N = {
     'system.cur_pw':'Current password', 'system.new_pw':'New password (≥8 chars)', 'system.change':'Change',
     'system.pw_required':'Current password + new password (≥8 chars) required',
     'system.pw_changed':'Changed. Please log in again.',
-    'system.fw_label':'Firmware',
-    'system.fw_current':'Currently running v{0}. Device auto-restarts after flashing and rolls back if it panics within 60s.',
-    'system.fw_or_upload':'or',
     'system.ota_label':'Firmware OTA',
     'system.ota_desc':'Currently running v{0}. Pick a .bin built from `make build`; device auto-restarts after flashing and rolls back if it panics within 60s.',
     'system.upload_flash':'Upload & flash',
@@ -442,17 +439,6 @@ const I18N = {
     'system.ota_confirm':'Upload {0} KB firmware and flash? Device auto-restarts when done.',
     'system.ota_progress':'Uploading {0}% · {1} / {2} KB',
     'system.ota_net_err':'Network error',
-    'system.gh_label':'Update from GitHub',
-    'system.gh_desc':'Check {0} for a newer firmware release. Verified by SHA256 before flashing.',
-    'system.gh_check':'Check for updates',
-    'system.gh_checking':'Checking…',
-    'system.gh_pull':'Update to {0}',
-    'system.gh_pulling':'Downloading + verifying…',
-    'system.gh_pull_confirm':'Pull {0} ({1} KB) from GitHub and flash? Device auto-restarts on success.',
-    'system.gh_uptodate':'Up to date (latest {0})',
-    'system.gh_newer':'{0} available (current v{1}) · published {2}',
-    'system.gh_ahead':'Running v{0}, ahead of latest release {1} (dev build)',
-    'system.gh_check_failed':'Check failed: {0}',
     'system.backup_label':'Backup',
     'system.backup_note':'Backup contains the WiFi password and admin password hash — keep it secure. To restore: factory reset, then upload the backup on the first-run setup screen.',
     'system.download_backup':'Download backup JSON',
@@ -604,9 +590,6 @@ const I18N = {
     'system.cur_pw':'当前密码', 'system.new_pw':'新密码 (≥8 位)', 'system.change':'修改',
     'system.pw_required':'需要填写当前密码 + 新密码 (≥8 位)',
     'system.pw_changed':'已修改,请重新登录。',
-    'system.fw_label':'固件',
-    'system.fw_current':'当前运行 v{0}。烧录完会自动重启,60 秒内 panic 会自动回滚。',
-    'system.fw_or_upload':'或',
     'system.ota_label':'固件 OTA',
     'system.ota_desc':'当前运行 v{0}。请上传 `make build` 产出的 .bin 文件;烧录完会自动重启,60 秒内 panic 会自动回滚。',
     'system.upload_flash':'上传并烧录',
@@ -614,17 +597,6 @@ const I18N = {
     'system.ota_confirm':'上传 {0} KB 固件并烧录?完成后会自动重启。',
     'system.ota_progress':'上传中 {0}% · {1} / {2} KB',
     'system.ota_net_err':'网络错误',
-    'system.gh_label':'GitHub 一键升级',
-    'system.gh_desc':'检查 {0} 是否发布了新固件,有就一键拉下来烧 (烧之前会校验 SHA256)。',
-    'system.gh_check':'检查更新',
-    'system.gh_checking':'检查中…',
-    'system.gh_pull':'升级到 {0}',
-    'system.gh_pulling':'下载并校验中…',
-    'system.gh_pull_confirm':'从 GitHub 拉取 {0} ({1} KB) 并烧录?成功后自动重启。',
-    'system.gh_uptodate':'已是最新版 ({0})',
-    'system.gh_newer':'{0} 可用 (当前 v{1}) · 发布于 {2}',
-    'system.gh_ahead':'当前 v{0},比最新发布 {1} 还新(dev build)',
-    'system.gh_check_failed':'检查失败:{0}',
     'system.backup_label':'备份',
     'system.backup_note':'备份包含 WiFi 密码与管理员密码哈希,请妥善保管。要恢复:先恢复出厂,然后在 first-run setup 页面上传备份文件。',
     'system.download_backup':'下载备份 JSON',
@@ -1227,18 +1199,13 @@ function renderSystem(){
 
     <div class=section>${t('system.section_maintenance')}</div>
     <div class=card>
-      <div class=ctitle>${t('system.fw_label')}</div>
-      <div class=cdesc>${t('system.fw_current',state.status?.version||'?')}</div>
-      <div class=row style='flex-wrap:wrap;gap:8px;margin-bottom:8px'>
-        <button class=btn id=ghCheckB>${t('system.gh_check')}</button>
-        <button class='btn primary' id=ghPullB style='display:none'></button>
-        <div class=grow></div>
-        <span class='t-mute' style='font-size:11px'>${t('system.fw_or_upload')}</span>
-        <input type=file id=otaFile accept='.bin' class=input style='max-width:200px'>
-        <button class=btn id=otaB>${t('system.upload_flash')}</button>
+      <div class=ctitle>${t('system.ota_label')}</div>
+      <div class=cdesc>${t('system.ota_desc',state.status?.version||'?')}</div>
+      <div class=row>
+        <input type=file id=otaFile accept='.bin' class=input style='flex:1'>
+        <button class='btn primary' id=otaB>${t('system.upload_flash')}</button>
       </div>
-      <div id=fwStatus class='t-mute' style='font-size:11px;min-height:14px'></div>
-      <div id=otaProgress class='mono t-mute' style='font-size:11px'></div>
+      <div id=otaProgress class='mono t-mute' style='font-size:11px;margin-top:8px'></div>
       <div class=otabar style='display:none' id=otaBarWrap><div class=fill id=otaBar></div></div>
     </div>
     <div class=s-grid>
@@ -1384,56 +1351,6 @@ function renderSystem(){
       if(ok)waitForReboot();$('otaB').disabled=false;};
     xhr.onerror=()=>{$('otaProgress').textContent=t('system.ota_net_err');$('otaB').disabled=false;};
     xhr.send(f);
-  };
-  $('ghCheckB').onclick=async()=>{
-    const cb=$('ghCheckB'),pb=$('ghPullB'),st=$('fwStatus');
-    cb.disabled=true; cb.textContent=t('system.gh_checking'); st.textContent='';
-    pb.style.display='none';
-    try{
-      const r=await fetch('/api/system/ota_check');
-      if(!r.ok){st.textContent=t('system.gh_check_failed',await r.text()); return;}
-      const d=await r.json();
-      // semver compare: strip leading 'v' and any "-dirty"/"-N-gXXX" suffix.
-      const parse=s=>String(s||'0.0.0').replace(/^v/,'').split('-')[0].split('.').map(n=>parseInt(n,10)||0);
-      const remote=parse(d.tag), local=parse(state.status?.version);
-      let cmp=0;
-      for(let i=0;i<3;i++){if(remote[i]>local[i]){cmp=1;break;}if(remote[i]<local[i]){cmp=-1;break;}}
-      if(cmp>0){
-        // Remote is newer — offer update.
-        st.textContent=t('system.gh_newer', d.tag, state.status?.version||'?', fmtRel(Math.floor(new Date(d.published_at).getTime()/1000)));
-        pb.textContent=t('system.gh_pull', d.tag);
-        pb.style.display='';
-        pb.dataset.tag=d.tag;
-        pb.dataset.bytes=d.asset_bytes;
-      } else if(cmp===0){
-        st.textContent=t('system.gh_uptodate', d.tag);
-      } else {
-        // Local is newer than latest release (running a dev build past the tag).
-        st.textContent=t('system.gh_ahead', state.status?.version||'?', d.tag);
-      }
-    } catch(_){ st.textContent=t('system.gh_check_failed','network'); }
-    finally { cb.disabled=false; cb.textContent=t('system.gh_check'); }
-  };
-  $('ghPullB').onclick=async()=>{
-    const pb=$('ghPullB'),st=$('fwStatus');
-    const tag=pb.dataset.tag, bytes=pb.dataset.bytes;
-    if(!confirm(t('system.gh_pull_confirm', tag, (bytes/1024).toFixed(0))))return;
-    pb.disabled=true; pb.textContent=t('system.gh_pulling');
-    st.textContent='';
-    try{
-      const r=await fetch('/api/system/ota_pull',{method:'POST'});
-      if(r.status===202){
-        // Server accepted, runs in background. Poll for reboot.
-        st.textContent=t('system.gh_pulling');
-        waitForReboot();
-      } else {
-        st.textContent=t('common.failed_prefix')+' '+await r.text();
-        pb.disabled=false; pb.textContent=t('system.gh_pull', tag);
-      }
-    } catch(_){
-      st.textContent=t('system.ota_net_err');
-      pb.disabled=false; pb.textContent=t('system.gh_pull', tag);
-    }
   };
 }
 

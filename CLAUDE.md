@@ -40,8 +40,6 @@ make build LED_BRIGHTNESS=1           # 0..255, sets per-channel ceiling for sta
 make build LED_ENABLE=0               # skip LED code entirely (board has no addressable pixel)
 ```
 
-GitHub OTA pull defaults to `chinaboard/dingdong`; override via `-DDD_OTA_REPO='"youruser/yourrepo"'` in `EXTRA_CFLAGS` if you fork. Asset filename matching (`DD_OTA_ASSET_PREFIX` + `.bin`, skip `DD_OTA_ASSET_BLOCKED`) defaults to picking `dingdong-{version}.bin` and avoiding `dingdong-merged-{version}.bin`.
-
 Each macro has a `#ifndef … #define` fallback in the consuming `.c`, so a bare `idf.py build` (no Makefile) still compiles with sensible defaults. **TZ is build-time only** — it sets the device's `setenv("TZ", ...)` for `localtime_r` calls (CSV export columns, `/api/today` / `/api/calendar` day boundaries). The Web UI displays times in the browser's timezone via `new Date(ts*1000).getHours()`, so the device-side TZ only matters for export and bucketing, not for what the dashboard renders.
 
 ## Versioning
@@ -125,11 +123,10 @@ Each `components/<name>/` is an isolated IDF component with `include/dd_<name>.h
 - `events` — thin layer above `storage`: builds the JSON line, looks up worker_id by peer addr, and applies a **10 s debounce per (peer, type)** — but only for `DD_SRC_BLE_AUTO`. Manual web/button clicks are intentional and pass through.
 - `workers` — NVS-backed worker registry, in-RAM cache of up to 32 entries. **Hard delete** via `dd_worker_delete(id)` — slot is freed and id can be reused. (Old soft-revoke field `dd_worker_t.revoked` is kept for backup-restore compat but no longer set.) `dd_worker_wipe` exists only for `/api/system/restore`.
 - `led` — single WS2812 driven via `espressif/led_strip` managed component. 100 ms `esp_timer` polls `dd_wifi_state()` / `dd_time_is_synced()` / `dd_ble_pairing_active()` / heap and pushes a colour: red fast-blink (heap critical) > cyan fast-blink (pairing window) > purple breath (SoftAP) > blue fast-blink (STA connecting/down) > yellow slow-blink (STA up, no NTP) > dim green steady (all good). Runtime on/off via `dd_led_set_enabled()` (persisted in NVS, exposed at `/api/system/led`). Build-time `DD_LED_ENABLE=0` compiles out the whole state machine.
-- `log_buf` — registers a vprintf hook via `esp_log_set_vprintf` that mirrors every ESP_LOGI/W/E into a 4 KB in-RAM ring buffer while still forwarding to the original UART target. `dd_log_read_tail(buf, cap)` returns the last `cap` bytes; serves `/api/system/logs` so remote-OTA debugging doesn't need a USB cable. Init very early in `app_main` so boot banner is captured.
-- `ota_pull` — GitHub Releases pull. `dd_ota_check()` GETs `/repos/{DD_OTA_REPO}/releases/latest` over HTTPS-no-verify, picks the asset matching `DD_OTA_ASSET_PREFIX` + `.bin` (skipping anything containing `DD_OTA_ASSET_BLOCKED`, default "merged" — guards against flashing the bootloader+app combined image to an OTA slot). `dd_ota_pull()` streams the asset into the next OTA partition via `esp_https_ota`, then re-reads the partition and verifies SHA256 against the GitHub API `digest` field before committing the boot partition. **Threat model**: hobby device, brick recoverable via USB; integrity comes from the SHA256 check, not transport. We deliberately disable cert verification (`CONFIG_ESP_TLS_INSECURE` + `CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY`) so we don't ship a CA bundle or risk cert rotation locking out OTA. `esp_https_ota_begin` rejects all-NULL cert config so a no-op `crt_attach` callback is supplied to satisfy that precondition without actually installing roots.
+- `log_buf` — registers a vprintf hook via `esp_log_set_vprintf` that mirrors every ESP_LOGI/W/E into a 4 KB in-RAM ring buffer while still forwarding to the original UART target. `dd_log_read_tail(buf, cap)` returns the last `cap` bytes; serves `/api/system/logs` so remote debugging doesn't need a USB cable. Init very early in `app_main` so boot banner is captured.
 - `http_app` — split across 4 files plus the Web UI:
   - `dd_http.c` (~250 lines) — server lifecycle, shared helpers (`reply_json_status`, `reply_text`, `recv_json_body`, cookie + auth), the route table, and `root_get` which serves `web/index.html` via a **gzipped binary blob** (built at CMake time, embedded with `target_add_binary_data`; saves ~20KB vs raw HTML). Sends `Content-Encoding: gzip`.
-  - `dd_http_system.c` — auth, system control, manual OTA upload, GitHub OTA (`/api/system/ota_check` + `/api/system/ota_pull`), runtime logs (`/api/system/logs[/clear]`), backup/restore, diag, public health/metrics/status.
+  - `dd_http_system.c` — auth, system control, manual OTA upload, runtime logs (`/api/system/logs[/clear]`), backup/restore, diag, public health/metrics/status, on-die temperature read.
   - `dd_http_attendance.c` — events log + today summary + calendar + paired (in/out → segments) view + CSV/JSONL export. The pair / today / calendar iter helpers are local to this file.
   - `dd_http_devices.c` — workers (incl. hard-delete via `/api/workers/delete`), bonds, pairing window (start/cancel/status/confirm), first-run setup, WiFi scan.
   - `http_internal.h` — shared decls (helpers + every handler signature) so the route table in `dd_http.c` can reference handlers defined in sibling files. **Not exported**; outside consumers still use `dd_http.h`.
@@ -142,13 +139,12 @@ Each `components/<name>/` is an isolated IDF component with `include/dd_<name>.h
 
 ## Size budget
 
-Image targets ≈1.52 MB / 96.8% of the 1.5 MB OTA slot — **tight, ~50 KB headroom**. Adding HTTPS for GitHub OTA pull (mbedtls TLS client + esp_https_ota) cost ~130 KB, partially offset by deliberately not shipping a CA bundle. Future feature additions need to budget against this. Key sdkconfig knobs that keep us in:
+Image targets ≈1.39 MB / 91% of the 1.5 MB OTA slot. Key sdkconfig knobs that keep us there:
 - `COMPILER_OPTIMIZATION_SIZE=y` (was DEBUG / `-Og` in stock IDF — single biggest win, ~200 KB)
 - `NEWLIB_NANO_FORMAT=y` (smaller printf without float by default)
 - `LWIP_IPV6=n` (we don't use it on the local network)
-- `MBEDTLS_TLS_CLIENT=y` / `ESP_HTTP_CLIENT_ENABLE_HTTPS=y` — needed for GitHub OTA. **Cert verification deliberately off** via `CONFIG_ESP_TLS_INSECURE=y` + `CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY=y`; `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=n` saves ~30 KB. Integrity comes from the SHA256 check in `dd_ota_pull` against the GitHub Releases API `digest` field, not from TLS.
-- `MBEDTLS_TLS_SERVER=n` / `ESP_WIFI_MBEDTLS_TLS_CLIENT=n` — we never serve TLS ourselves, and WiFi enterprise auth isn't needed.
-- `MBEDTLS_SHA1_C=n` / `MBEDTLS_SHA384_C=n` / `MBEDTLS_SHA512_C=n` — only PBKDF2-SHA256 (admin pw) and SHA-256 (OTA verify) needed.
+- `MBEDTLS_TLS_CLIENT=n` / `MBEDTLS_TLS_SERVER=n` / `ESP_HTTP_CLIENT_ENABLE_HTTPS=n` — no HTTPS anywhere. We tried direct GitHub OTA over HTTPS-no-verify; cost was ~100 KB and the CDN's TLS config (RSA cert, X25519 ECDHE) needed too many compromises in the trim — abandoned in favor of manual `.bin` upload via the Web UI.
+- `MBEDTLS_SHA1_C=n` / `MBEDTLS_SHA384_C=n` / `MBEDTLS_SHA512_C=n` — only PBKDF2-SHA256 needed
 - `BT_NIMBLE_ROLE_CENTRAL=y` — needed for the presence connect-probe (we briefly connect to bonded peers as Central to distinguish "locked iPhone" from "left the room")
 
 ## Conventions worth preserving
