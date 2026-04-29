@@ -713,9 +713,16 @@ void dd_ble_pairing_cancel(void)
     if (s_pairing_expire_timer) esp_timer_stop(s_pairing_expire_timer);
 
     if (was_active) {
+        // Defer the adv restart instead of doing it synchronously here:
+        // pairing_cancel is called from BLE_GAP_EVENT_ENC_CHANGE (post-bond)
+        // in addition to HTTP cancel + window-expire timer. Calling
+        // start_advertising synchronously from a GAP callback hits the
+        // EBUSY race the CLAUDE.md warns about, leaves s_advertising=false
+        // and the status badge stuck on "BLE". Defer-everywhere is safer
+        // than branching on caller context.
         s_advertising = false;
         ble_gap_ext_adv_stop(HID_ADV_INSTANCE);
-        start_advertising();
+        schedule_adv_restart(50);
     }
 }
 
