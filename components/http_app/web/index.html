@@ -454,6 +454,7 @@ const I18N = {
     'system.gh_pull_confirm':'Pull {0} ({1} KB) from GitHub and flash? Device auto-restarts on success.',
     'system.gh_uptodate':'Up to date (latest {0})',
     'system.gh_newer':'{0} available (current v{1}) · published {2}',
+    'system.gh_ahead':'Running v{0}, ahead of latest release {1} (dev build)',
     'system.gh_check_failed':'Check failed: {0}',
     'system.backup_label':'Backup',
     'system.backup_note':'Backup contains the WiFi password and admin password hash — keep it secure. To restore: factory reset, then upload the backup on the first-run setup screen.',
@@ -626,6 +627,7 @@ const I18N = {
     'system.gh_pull_confirm':'从 GitHub 拉取 {0} ({1} KB) 并烧录?成功后自动重启。',
     'system.gh_uptodate':'已是最新版 ({0})',
     'system.gh_newer':'{0} 可用 (当前 v{1}) · 发布于 {2}',
+    'system.gh_ahead':'当前 v{0},比最新发布 {1} 还新(dev build)',
     'system.gh_check_failed':'检查失败:{0}',
     'system.backup_label':'备份',
     'system.backup_note':'备份包含 WiFi 密码与管理员密码哈希,请妥善保管。要恢复:先恢复出厂,然后在 first-run setup 页面上传备份文件。',
@@ -1414,16 +1416,23 @@ function renderSystem(){
       const r=await fetch('/api/system/ota_check');
       if(!r.ok){st.textContent=t('system.gh_check_failed',await r.text()); return;}
       const d=await r.json();
-      const cur='v'+(state.status?.version||'?').split('-')[0];
-      const newer = d.tag !== cur;
-      if(newer){
+      // semver compare: strip leading 'v' and any "-dirty"/"-N-gXXX" suffix.
+      const parse=s=>String(s||'0.0.0').replace(/^v/,'').split('-')[0].split('.').map(n=>parseInt(n,10)||0);
+      const remote=parse(d.tag), local=parse(state.status?.version);
+      let cmp=0;
+      for(let i=0;i<3;i++){if(remote[i]>local[i]){cmp=1;break;}if(remote[i]<local[i]){cmp=-1;break;}}
+      if(cmp>0){
+        // Remote is newer — offer update.
         st.textContent=t('system.gh_newer', d.tag, state.status?.version||'?', fmtRel(Math.floor(new Date(d.published_at).getTime()/1000)));
         pb.textContent=t('system.gh_pull', d.tag);
         pb.style.display='';
         pb.dataset.tag=d.tag;
         pb.dataset.bytes=d.asset_bytes;
-      } else {
+      } else if(cmp===0){
         st.textContent=t('system.gh_uptodate', d.tag);
+      } else {
+        // Local is newer than latest release (running a dev build past the tag).
+        st.textContent=t('system.gh_ahead', state.status?.version||'?', d.tag);
       }
     } catch(_){ st.textContent=t('system.gh_check_failed','network'); }
     finally { cb.disabled=false; cb.textContent=t('system.gh_check'); }
