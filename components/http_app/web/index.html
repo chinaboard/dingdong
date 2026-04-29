@@ -1203,6 +1203,9 @@ async function loadDiag(){
       <div class=k>${t('diag.chip')}</div>
       <div class=v>${chip.model||'?'}</div>
       <div class=sub>${t('diag.rev')} ${chip.rev_major||0}.${chip.rev_minor||0} · ${chip.cores||0} ${t('diag.cores')}</div>
+      <div class='sub mono'>BT  ${chip.mac_bt||'-'}</div>
+      <div class='sub mono'>WiFi ${chip.mac_wifi||'-'}</div>
+      <div class='sub mono'>${chip.mdns||'-'}.local</div>
       <div class=sub>${t('diag.reset_reason')} <span class=mono>${r.reset_reason||'-'}</span></div>
     </div>
     <div class=tile>
@@ -1239,7 +1242,7 @@ async function loadDiag(){
     fmtBytes(r.events_retention?.max_bytes_cap||0),
     r.events_count||0,
     r.workers_count||0);
-  $('diagRaw').textContent=JSON.stringify(r,null,2);
+  $('diagRaw').textContent=JSON.stringify({status:state.status,diag:r},null,2);
 }
 
 function waitForReboot(){

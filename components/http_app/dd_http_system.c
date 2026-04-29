@@ -580,6 +580,21 @@ esp_err_t diag_get(httpd_req_t *req)
     cJSON_AddNumberToObject(chip, "rev_major", info.revision / 100);
     cJSON_AddNumberToObject(chip, "rev_minor", info.revision % 100);
     cJSON_AddNumberToObject(chip, "cores", info.cores);
+    {
+        uint8_t mac[6];
+        char buf[18];
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        cJSON_AddStringToObject(chip, "mac_wifi", buf);
+        esp_read_mac(mac, ESP_MAC_BT);
+        snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        cJSON_AddStringToObject(chip, "mac_bt", buf);
+        char host[24];
+        snprintf(host, sizeof(host), "dingdong-%02x%02x", mac[4], mac[5]);
+        cJSON_AddStringToObject(chip, "mdns", host);
+    }
     cJSON_AddItemToObject(j, "chip", chip);
 
     cJSON *heap = cJSON_CreateObject();
