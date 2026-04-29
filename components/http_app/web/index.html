@@ -246,10 +246,8 @@ details[open]>summary::before{content:'▾ '}
 /* System tab section grouping. Replaces the old single-column wall-of-cards
    with header-separated sections; small settings cards pair up two-per-row
    on wide screens, stack on mobile. */
-.section{display:flex;flex-direction:column;gap:2px;margin:24px 4px 10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.section{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--t2);font-weight:600;margin:24px 4px 10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
 .section:first-child{margin-top:0}
-.section .h{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--t2);font-weight:600}
-.section .d{font-size:11px;color:var(--t3);font-weight:400}
 .s-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:720px){.s-grid{grid-template-columns:1fr}}
 .s-grid > .card{margin-top:0}
@@ -411,13 +409,9 @@ const I18N = {
     'system.desc':'Diagnostics, device name, firmware update, backup, danger zone.',
     'system.diag_label':'Diagnostics',
     'system.section_settings':'Settings',
-    'system.section_settings_desc':'Device behavior knobs — kept persistent across reboots.',
     'system.section_maintenance':'Maintenance',
-    'system.section_maintenance_desc':'Firmware updates, time sync, configuration backup.',
     'system.section_diagnostics':'Diagnostics',
-    'system.section_diagnostics_desc':'Live runtime telemetry plus the in-RAM ESP_LOG capture.',
     'system.section_danger':'Danger zone',
-    'system.section_danger_desc':'Destructive actions — irreversible once confirmed.',
     'system.ntp_label':'NTP server',
     'system.ntp_synced':'Synced {0}.',
     'system.ntp_unsynced':'Not synced yet — check server reachability.',
@@ -438,6 +432,9 @@ const I18N = {
     'system.cur_pw':'Current password', 'system.new_pw':'New password (≥8 chars)', 'system.change':'Change',
     'system.pw_required':'Current password + new password (≥8 chars) required',
     'system.pw_changed':'Changed. Please log in again.',
+    'system.fw_label':'Firmware',
+    'system.fw_current':'Currently running v{0}. Device auto-restarts after flashing and rolls back if it panics within 60s.',
+    'system.fw_or_upload':'or',
     'system.ota_label':'Firmware OTA',
     'system.ota_desc':'Currently running v{0}. Pick a .bin built from `make build`; device auto-restarts after flashing and rolls back if it panics within 60s.',
     'system.upload_flash':'Upload & flash',
@@ -469,7 +466,6 @@ const I18N = {
 
     'diag.firmware':'Firmware', 'diag.idf':'IDF',
     'diag.chip':'Chip', 'diag.rev':'rev', 'diag.cores':'core',
-    'diag.temp':'Die temp',
     'diag.identity':'Identity',
     'diag.reset_reason':'Reset reason',
     'diag.boot_runtime':'Boot / runtime', 'diag.boots':'boots',
@@ -585,13 +581,9 @@ const I18N = {
     'system.desc':'诊断信息、设备名、固件升级、备份与危险操作。',
     'system.diag_label':'诊断信息',
     'system.section_settings':'设置',
-    'system.section_settings_desc':'设备行为相关的可持久化配置。',
     'system.section_maintenance':'维护',
-    'system.section_maintenance_desc':'固件升级、时间同步、配置备份。',
     'system.section_diagnostics':'诊断',
-    'system.section_diagnostics_desc':'运行时遥测和最近 ESP_LOG 输出缓存。',
     'system.section_danger':'危险操作',
-    'system.section_danger_desc':'破坏性操作 — 确认后不可撤销。',
     'system.ntp_label':'NTP 服务器',
     'system.ntp_synced':'已同步 ({0})。',
     'system.ntp_unsynced':'尚未同步 — 检查服务器是否可达。',
@@ -612,6 +604,9 @@ const I18N = {
     'system.cur_pw':'当前密码', 'system.new_pw':'新密码 (≥8 位)', 'system.change':'修改',
     'system.pw_required':'需要填写当前密码 + 新密码 (≥8 位)',
     'system.pw_changed':'已修改,请重新登录。',
+    'system.fw_label':'固件',
+    'system.fw_current':'当前运行 v{0}。烧录完会自动重启,60 秒内 panic 会自动回滚。',
+    'system.fw_or_upload':'或',
     'system.ota_label':'固件 OTA',
     'system.ota_desc':'当前运行 v{0}。请上传 `make build` 产出的 .bin 文件;烧录完会自动重启,60 秒内 panic 会自动回滚。',
     'system.upload_flash':'上传并烧录',
@@ -643,7 +638,6 @@ const I18N = {
 
     'diag.firmware':'固件', 'diag.idf':'IDF',
     'diag.chip':'芯片', 'diag.rev':'版本', 'diag.cores':'核',
-    'diag.temp':'裸片温度',
     'diag.identity':'设备标识',
     'diag.reset_reason':'复位原因',
     'diag.boot_runtime':'启动 / 运行', 'diag.boots':'次启动',
@@ -1007,10 +1001,7 @@ async function renderAttendance(){
         <button class='btn ghost' id=expJsonl>${t('attendance.jsonl')}</button>
       </div>
     </div>
-    <div class=section>
-      <div class=h>${t('system.section_danger')}</div>
-      <div class=d>${t('system.section_danger_desc')}</div>
-    </div>
+    <div class=section>${t('system.section_danger')}</div>
     <div class=card>
       <div class=cdesc>${t('attendance.wipe_hint')}</div>
       <button class='btn danger' id=wipeB>${t('attendance.wipe')}</button>
@@ -1196,10 +1187,7 @@ function renderSystem(){
   $('main').innerHTML=`
     <div class=ph><h1>${t('system.title')}</h1><div class=desc>${t('system.desc')}</div></div>
 
-    <div class=section>
-      <div class=h>${t('system.section_settings')}</div>
-      <div class=d>${t('system.section_settings_desc')}</div>
-    </div>
+    <div class=section>${t('system.section_settings')}</div>
     <div class=s-grid>
       <div class=card>
         <div class=ctitle>${t('system.led_label')}</div>
@@ -1237,28 +1225,21 @@ function renderSystem(){
       </form>
     </div>
 
-    <div class=section>
-      <div class=h>${t('system.section_maintenance')}</div>
-      <div class=d>${t('system.section_maintenance_desc')}</div>
-    </div>
+    <div class=section>${t('system.section_maintenance')}</div>
     <div class=card>
-      <div class=ctitle>${t('system.ota_label')}</div>
-      <div class=cdesc>${t('system.ota_desc',state.status?.version||'?')}</div>
-      <div class=row>
-        <input type=file id=otaFile accept='.bin' class=input style='flex:1'>
-        <button class='btn primary' id=otaB>${t('system.upload_flash')}</button>
-      </div>
-      <div id=otaProgress class='mono t-mute' style='font-size:11px;margin-top:8px'></div>
-      <div class=otabar style='display:none' id=otaBarWrap><div class=fill id=otaBar></div></div>
-    </div>
-    <div class=card>
-      <div class=ctitle>${t('system.gh_label')}</div>
-      <div class=cdesc>${t('system.gh_desc','chinaboard/dingdong')}</div>
-      <div class=row style='flex-wrap:wrap;gap:8px'>
+      <div class=ctitle>${t('system.fw_label')}</div>
+      <div class=cdesc>${t('system.fw_current',state.status?.version||'?')}</div>
+      <div class=row style='flex-wrap:wrap;gap:8px;margin-bottom:8px'>
         <button class=btn id=ghCheckB>${t('system.gh_check')}</button>
         <button class='btn primary' id=ghPullB style='display:none'></button>
+        <div class=grow></div>
+        <span class='t-mute' style='font-size:11px'>${t('system.fw_or_upload')}</span>
+        <input type=file id=otaFile accept='.bin' class=input style='max-width:200px'>
+        <button class=btn id=otaB>${t('system.upload_flash')}</button>
       </div>
-      <div id=ghStatus class='t-mute' style='font-size:11px;margin-top:8px;min-height:14px'></div>
+      <div id=fwStatus class='t-mute' style='font-size:11px;min-height:14px'></div>
+      <div id=otaProgress class='mono t-mute' style='font-size:11px'></div>
+      <div class=otabar style='display:none' id=otaBarWrap><div class=fill id=otaBar></div></div>
     </div>
     <div class=s-grid>
       <div class=card>
@@ -1288,10 +1269,7 @@ function renderSystem(){
       </div>
     </div>
 
-    <div class=section>
-      <div class=h>${t('system.section_diagnostics')}</div>
-      <div class=d>${t('system.section_diagnostics_desc')}</div>
-    </div>
+    <div class=section>${t('system.section_diagnostics')}</div>
     <div class=card>
       <div id=diagTiles class=tiles>${t('common.loading')}</div>
     </div>
@@ -1310,10 +1288,7 @@ function renderSystem(){
       </div>
     </div>
 
-    <div class=section>
-      <div class=h>${t('system.section_danger')}</div>
-      <div class=d>${t('system.section_danger_desc')}</div>
-    </div>
+    <div class=section>${t('system.section_danger')}</div>
     <div class=card>
       <div class=row style='flex-wrap:wrap;gap:8px'>
         <button class='btn ghost' id=restartB>${t('system.restart')}</button>
@@ -1411,7 +1386,7 @@ function renderSystem(){
     xhr.send(f);
   };
   $('ghCheckB').onclick=async()=>{
-    const cb=$('ghCheckB'),pb=$('ghPullB'),st=$('ghStatus');
+    const cb=$('ghCheckB'),pb=$('ghPullB'),st=$('fwStatus');
     cb.disabled=true; cb.textContent=t('system.gh_checking'); st.textContent='';
     pb.style.display='none';
     try{
@@ -1440,7 +1415,7 @@ function renderSystem(){
     finally { cb.disabled=false; cb.textContent=t('system.gh_check'); }
   };
   $('ghPullB').onclick=async()=>{
-    const pb=$('ghPullB'),st=$('ghStatus');
+    const pb=$('ghPullB'),st=$('fwStatus');
     const tag=pb.dataset.tag, bytes=pb.dataset.bytes;
     if(!confirm(t('system.gh_pull_confirm', tag, (bytes/1024).toFixed(0))))return;
     pb.disabled=true; pb.textContent=t('system.gh_pulling');
@@ -1477,10 +1452,9 @@ async function loadDiag(){
     </div>
     <div class=tile>
       <div class=k>${t('diag.chip')}</div>
-      <div class=v>${chip.model||'?'}</div>
+      <div class=v>${chip.model||'?'} <span class='${chip.temp_c>85?"t-neg":"t-mute"}' style='font-size:11px;font-weight:400'>${chip.temp_c?chip.temp_c.toFixed(1)+'°C':''}</span></div>
       <div class=sub>${t('diag.rev')} ${chip.rev_major||0}.${chip.rev_minor||0} · ${chip.cores||0} ${t('diag.cores')}</div>
       <div class=sub>${t('diag.reset_reason')} <span class=mono>${r.reset_reason||'-'}</span></div>
-      <div class=sub>${t('diag.temp')} <span class='mono ${chip.temp_c>85?"t-neg":(chip.temp_c>70?"":"")}'>${chip.temp_c?chip.temp_c.toFixed(1):'?'} °C</span></div>
     </div>
     <div class=tile>
       <div class=k>${t('diag.identity')}</div>
