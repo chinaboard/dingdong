@@ -388,6 +388,8 @@ const I18N = {
     'system.ntp_synced':'Time is synced.',
     'system.ntp_unsynced':'Not synced yet — check server reachability.',
     'system.ntp_note':'* Hostname or IP. Must respond to NTP queries on UDP/123. Common picks: pool.ntp.org · time.cloudflare.com · time.apple.com · ntp.aliyun.com',
+    'system.reset_stats':'Reset boot/uptime stats',
+    'system.reset_stats_confirm':'Reset boot count + total uptime to zero?',
     'system.show_raw':'Show raw JSON',
     'system.sync_ntp':'Sync NTP',
     'system.logout':'Log out',
@@ -430,7 +432,7 @@ const I18N = {
     'diag.disk':'Disk',
     'diag.events_file':'events.jsonl',
     'diag.ota_slot':'OTA slots', 'diag.running':'running', 'diag.next_slot':'next',
-    'diag.foot':'Retain {0} days / cap {1} · {2} events · {3} workers',
+    'diag.foot':'events.jsonl: retain {0} days · safety cap {1}',
   },
   zh: {
     'nav.overview':'总览', 'nav.attendance':'考勤', 'nav.people':'人员', 'nav.system':'系统',
@@ -536,6 +538,8 @@ const I18N = {
     'system.ntp_synced':'时间已同步。',
     'system.ntp_unsynced':'尚未同步 — 检查服务器是否可达。',
     'system.ntp_note':'* 域名或 IP。需要响应 UDP/123 上的 NTP 查询。常用:pool.ntp.org · time.cloudflare.com · time.apple.com · ntp.aliyun.com',
+    'system.reset_stats':'清零启动/运行统计',
+    'system.reset_stats_confirm':'把启动次数 + 累计运行时间清零?',
     'system.show_raw':'查看原始 JSON',
     'system.sync_ntp':'同步时间',
     'system.logout':'退出登录',
@@ -578,7 +582,7 @@ const I18N = {
     'diag.disk':'磁盘',
     'diag.events_file':'events.jsonl',
     'diag.ota_slot':'OTA 分区', 'diag.running':'运行中', 'diag.next_slot':'OTA 写这里',
-    'diag.foot':'保留 {0} 天 / 上限 {1} · {2} 条事件 · {3} 名员工',
+    'diag.foot':'events.jsonl:保留 {0} 天 · 大小上限 {1}',
   },
 };
 function pickLang(){
@@ -1148,6 +1152,9 @@ function renderSystem(){
         </div>
         <div class='t-mute' id=ntpStatus style='font-size:11px;margin-top:6px'></div>
         <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.ntp_note')}</div>
+        <div class=row style='margin-top:10px'>
+          <button class='btn ghost sm' id=ntpResync>${t('system.sync_ntp')}</button>
+        </div>
       </div>
       <div class=card>
         <div class=label>${t('system.backup_label')}</div>
@@ -1166,7 +1173,8 @@ function renderSystem(){
       </details>
       <div class=row style='margin-top:12px'>
         <button class='btn ghost' id=diagRefresh>${t('common.refresh')}</button>
-        <button class='btn ghost' id=ntpResync>${t('system.sync_ntp')}</button>
+        <div class=grow></div>
+        <button class='btn ghost sm' id=metricsResetB>${t('system.reset_stats')}</button>
       </div>
     </div>
 
@@ -1215,6 +1223,11 @@ function renderSystem(){
   $('diagRefresh').onclick=loadDiag;
   $('ntpResync').onclick=async e=>{await fetch('/api/system/time_resync',{method:'POST'});
     e.target.textContent='✓';setTimeout(()=>e.target.textContent=t('system.sync_ntp'),1500);};
+  $('metricsResetB').onclick=async e=>{
+    if(!confirm(t('system.reset_stats_confirm')))return;
+    const r=await fetch('/api/system/metrics_reset',{method:'POST'});
+    if(r.ok){loadDiag();}else alert(t('common.failed'));
+  };
   $('nameSaveB').onclick=async e=>{
     const name=$('nameInput').value.trim();if(!name)return;
     const r=await fetch('/api/system/device_name',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
@@ -1305,9 +1318,7 @@ async function loadDiag(){
     </div>`;
   $('diagFoot').innerHTML=t('diag.foot',
     r.events_retention?.retention_days||0,
-    fmtBytes(r.events_retention?.max_bytes_cap||0),
-    r.events_count||0,
-    r.workers_count||0);
+    fmtBytes(r.events_retention?.max_bytes_cap||0));
   $('diagRaw').textContent=JSON.stringify({status:state.status,diag:r},null,2);
 }
 

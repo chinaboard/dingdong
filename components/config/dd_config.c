@@ -316,15 +316,39 @@ esp_err_t dd_metrics_record_boot(void)
 
 esp_err_t dd_metrics_save_uptime(uint32_t seconds)
 {
+    // Caller passes cumulative seconds-since-this-boot (esp_timer_get_time/1e6)
+    // every minute. Only add the delta since last save — the previous version
+    // added the whole cumulative each time, so total grew quadratically: a
+    // ~2-hour boot contributed ~5 days to the running total. Static resets to
+    // 0 every boot, so the first save adds the full ~60s of this boot, which
+    // is correct.
+    static uint32_t last_saved = 0;
+    uint32_t delta = (seconds > last_saved) ? (seconds - last_saved) : seconds;
+    last_saved = seconds;
+
     nvs_handle_t h;
     esp_err_t err = nvs_open(NS, NVS_READWRITE, &h);
     if (err != ESP_OK) return err;
     uint64_t total = 0;
     nvs_get_u64(h, KEY_TOTAL_UPTIME, &total);
-    total += seconds;
+    total += delta;
     err = nvs_set_u64(h, KEY_TOTAL_UPTIME, total);
     if (err == ESP_OK) err = nvs_set_u32(h, KEY_LAST_UPTIME, seconds);
     if (err == ESP_OK) err = nvs_commit(h);
     nvs_close(h);
+    return err;
+}
+
+esp_err_t dd_metrics_reset(void)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NS, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+    nvs_erase_key(h, KEY_BOOT_COUNT);
+    nvs_erase_key(h, KEY_TOTAL_UPTIME);
+    nvs_erase_key(h, KEY_LAST_UPTIME);
+    err = nvs_commit(h);
+    nvs_close(h);
+    ESP_LOGW(TAG, "metrics reset");
     return err;
 }

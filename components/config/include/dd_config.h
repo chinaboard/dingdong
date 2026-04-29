@@ -59,6 +59,7 @@ typedef struct {
 esp_err_t dd_metrics_load(dd_metrics_t *out);
 esp_err_t dd_metrics_record_boot(void);   // increments boot_count, returns new
 esp_err_t dd_metrics_save_uptime(uint32_t seconds);  // total += seconds, last = seconds
+esp_err_t dd_metrics_reset(void);          // zeros boot_count + total/last uptime
 
 #ifdef __cplusplus
 }

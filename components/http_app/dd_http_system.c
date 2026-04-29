@@ -388,6 +388,14 @@ esp_err_t ntp_server_post(httpd_req_t *req)
     return reply_text(req, "200 OK", "ok, resyncing");
 }
 
+esp_err_t metrics_reset_post(httpd_req_t *req)
+{
+    if (require_auth(req) != ESP_OK) return ESP_OK;
+    esp_err_t err = dd_metrics_reset();
+    if (err != ESP_OK) return reply_text(req, "500 Internal Server Error", "reset failed");
+    return reply_text(req, "200 OK", "ok");
+}
+
 // ---------- backup / restore ----------
 //
 // Backup contains everything needed to recreate the device's logical state on
