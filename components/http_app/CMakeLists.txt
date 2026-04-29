@@ -5,7 +5,7 @@ idf_component_register(
          "dd_http_devices.c"
     INCLUDE_DIRS "include"
     REQUIRES esp_http_server esp_timer esp_wifi esp_system log
-             config wifi_mgr session ble events storage time_sync workers led log_buf
+             config wifi_mgr session ble events storage time_sync workers led log_buf ota_pull
     PRIV_REQUIRES cjson esp_app_format app_update
 )
 

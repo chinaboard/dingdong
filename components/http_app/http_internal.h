@@ -51,6 +51,8 @@ esp_err_t ntp_server_post(httpd_req_t *req);
 esp_err_t metrics_reset_post(httpd_req_t *req);
 esp_err_t logs_get(httpd_req_t *req);
 esp_err_t logs_clear_post(httpd_req_t *req);
+esp_err_t ota_check_get(httpd_req_t *req);
+esp_err_t ota_pull_post(httpd_req_t *req);
 esp_err_t backup_get(httpd_req_t *req);
 esp_err_t restore_post(httpd_req_t *req);
 esp_err_t ota_post(httpd_req_t *req);

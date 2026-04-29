@@ -445,6 +445,16 @@ const I18N = {
     'system.ota_confirm':'Upload {0} KB firmware and flash? Device auto-restarts when done.',
     'system.ota_progress':'Uploading {0}% · {1} / {2} KB',
     'system.ota_net_err':'Network error',
+    'system.gh_label':'Update from GitHub',
+    'system.gh_desc':'Fetches the latest release from github.com/{0}, verifies SHA256 against the API digest, then flashes. No CA verification — relies on the hash for integrity (see dd_ota_pull.c).',
+    'system.gh_check':'Check for updates',
+    'system.gh_checking':'Checking…',
+    'system.gh_pull':'Update to {0}',
+    'system.gh_pulling':'Downloading + verifying…',
+    'system.gh_pull_confirm':'Pull {0} ({1} KB) from GitHub and flash? Device auto-restarts on success.',
+    'system.gh_uptodate':'Up to date (latest {0})',
+    'system.gh_newer':'{0} available (current v{1}) · published {2}',
+    'system.gh_check_failed':'Check failed: {0}',
     'system.backup_label':'Backup',
     'system.backup_note':'Backup contains the WiFi password and admin password hash — keep it secure. To restore: factory reset, then upload the backup on the first-run setup screen.',
     'system.download_backup':'Download backup JSON',
@@ -607,6 +617,16 @@ const I18N = {
     'system.ota_confirm':'上传 {0} KB 固件并烧录?完成后会自动重启。',
     'system.ota_progress':'上传中 {0}% · {1} / {2} KB',
     'system.ota_net_err':'网络错误',
+    'system.gh_label':'GitHub 一键升级',
+    'system.gh_desc':'从 github.com/{0} 拉最新 release,用 API 返回的 digest 字段校验 SHA256 后烧录。不校验 TLS 证书 — 完整性靠 hash 保证(详见 dd_ota_pull.c)。',
+    'system.gh_check':'检查更新',
+    'system.gh_checking':'检查中…',
+    'system.gh_pull':'升级到 {0}',
+    'system.gh_pulling':'下载并校验中…',
+    'system.gh_pull_confirm':'从 GitHub 拉取 {0} ({1} KB) 并烧录?成功后自动重启。',
+    'system.gh_uptodate':'已是最新版 ({0})',
+    'system.gh_newer':'{0} 可用 (当前 v{1}) · 发布于 {2}',
+    'system.gh_check_failed':'检查失败:{0}',
     'system.backup_label':'备份',
     'system.backup_note':'备份包含 WiFi 密码与管理员密码哈希,请妥善保管。要恢复:先恢复出厂,然后在 first-run setup 页面上传备份文件。',
     'system.download_backup':'下载备份 JSON',
@@ -1227,6 +1247,15 @@ function renderSystem(){
       <div id=otaProgress class='mono t-mute' style='font-size:11px;margin-top:8px'></div>
       <div class=otabar style='display:none' id=otaBarWrap><div class=fill id=otaBar></div></div>
     </div>
+    <div class=card>
+      <div class=ctitle>${t('system.gh_label')}</div>
+      <div class=cdesc>${t('system.gh_desc','chinaboard/dingdong')}</div>
+      <div class=row style='flex-wrap:wrap;gap:8px'>
+        <button class=btn id=ghCheckB>${t('system.gh_check')}</button>
+        <button class='btn primary' id=ghPullB style='display:none'></button>
+      </div>
+      <div id=ghStatus class='t-mute' style='font-size:11px;margin-top:8px;min-height:14px'></div>
+    </div>
     <div class=s-grid>
       <div class=card>
         <div class=ctitle>${t('system.ntp_label')}</div>
@@ -1376,6 +1405,49 @@ function renderSystem(){
       if(ok)waitForReboot();$('otaB').disabled=false;};
     xhr.onerror=()=>{$('otaProgress').textContent=t('system.ota_net_err');$('otaB').disabled=false;};
     xhr.send(f);
+  };
+  $('ghCheckB').onclick=async()=>{
+    const cb=$('ghCheckB'),pb=$('ghPullB'),st=$('ghStatus');
+    cb.disabled=true; cb.textContent=t('system.gh_checking'); st.textContent='';
+    pb.style.display='none';
+    try{
+      const r=await fetch('/api/system/ota_check');
+      if(!r.ok){st.textContent=t('system.gh_check_failed',await r.text()); return;}
+      const d=await r.json();
+      const cur='v'+(state.status?.version||'?').split('-')[0];
+      const newer = d.tag !== cur;
+      if(newer){
+        st.textContent=t('system.gh_newer', d.tag, state.status?.version||'?', fmtRel(Math.floor(new Date(d.published_at).getTime()/1000)));
+        pb.textContent=t('system.gh_pull', d.tag);
+        pb.style.display='';
+        pb.dataset.tag=d.tag;
+        pb.dataset.bytes=d.asset_bytes;
+      } else {
+        st.textContent=t('system.gh_uptodate', d.tag);
+      }
+    } catch(_){ st.textContent=t('system.gh_check_failed','network'); }
+    finally { cb.disabled=false; cb.textContent=t('system.gh_check'); }
+  };
+  $('ghPullB').onclick=async()=>{
+    const pb=$('ghPullB'),st=$('ghStatus');
+    const tag=pb.dataset.tag, bytes=pb.dataset.bytes;
+    if(!confirm(t('system.gh_pull_confirm', tag, (bytes/1024).toFixed(0))))return;
+    pb.disabled=true; pb.textContent=t('system.gh_pulling');
+    st.textContent='';
+    try{
+      const r=await fetch('/api/system/ota_pull',{method:'POST'});
+      if(r.status===202){
+        // Server accepted, runs in background. Poll for reboot.
+        st.textContent=t('system.gh_pulling');
+        waitForReboot();
+      } else {
+        st.textContent=t('common.failed_prefix')+' '+await r.text();
+        pb.disabled=false; pb.textContent=t('system.gh_pull', tag);
+      }
+    } catch(_){
+      st.textContent=t('system.ota_net_err');
+      pb.disabled=false; pb.textContent=t('system.gh_pull', tag);
+    }
   };
 }
 

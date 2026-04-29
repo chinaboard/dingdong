@@ -76,11 +76,17 @@ CONFIG_MBEDTLS_SHA1_C=n
 CONFIG_MBEDTLS_SHA384_C=n
 CONFIG_MBEDTLS_SHA512_C=n
 
-# --- TLS / HTTPS: not used (no HTTPS server, no HTTPS client) ---
-CONFIG_MBEDTLS_TLS_CLIENT=n
+# --- TLS / HTTPS: needed for GitHub OTA pull (no cert verify — see dd_ota_pull) ---
+CONFIG_MBEDTLS_TLS_CLIENT=y
 CONFIG_MBEDTLS_TLS_SERVER=n
-CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=n
+CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
 CONFIG_ESP_WIFI_MBEDTLS_TLS_CLIENT=n
+CONFIG_ESP_TLS_INSECURE=y
+CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY=y
+# Don't ship the Mozilla CA bundle — we deliberately don't verify (threat
+# model is "fire-and-forget hobby device, brick recoverable via USB"; integrity
+# guaranteed by SHA256 against GitHub Releases API `digest` field).
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=n
 
 # --- LwIP: drop IPv6 (we only need IPv4 on the local network) ---
 CONFIG_LWIP_IPV6=n
