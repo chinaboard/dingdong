@@ -152,7 +152,6 @@ body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;pa
 
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px}
 .card + .card{margin-top:12px}
-.card .label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:10px;font-weight:500}
 .card h2{font-size:14px;margin:0 0 8px;font-weight:600;letter-spacing:-.01em}
 
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
@@ -173,6 +172,9 @@ body.wizard .form .btn.primary{display:flex;width:100%;justify-content:center;pa
 .btn.danger:hover{background:var(--danger-bg);border-color:var(--danger)}
 .btn.sm{padding:4px 8px;font-size:11px}
 .btn[disabled]{opacity:.5;cursor:not-allowed}
+/* Primary submit at the bottom of a stacked .form (login, setup, change pw):
+   extra top margin + centered text without an inline style. */
+.form .btn.submit{margin-top:6px;justify-content:center}
 
 .input,select.input{background:var(--bg);border:1px solid var(--border-strong);border-radius:var(--r);padding:6px 10px;color:var(--t1);outline:none;transition:border-color .12s;font-size:13px}
 .input:focus{border-color:var(--accent)}
@@ -339,6 +341,7 @@ const I18N = {
     'login.admin_ph':'Admin password',
     'login.btn':'Log in',
     'login.wrong':'Wrong password',
+    'wizard.device_label':'Configuring device',
 
     'overview.title':'Overview',
     'overview.desc':"Device status and today's attendance.",
@@ -500,6 +503,7 @@ const I18N = {
     'login.admin_ph':'管理员密码',
     'login.btn':'登录',
     'login.wrong':'密码错误',
+    'wizard.device_label':'当前设备',
 
     'overview.title':'总览',
     'overview.desc':'设备状态与今日考勤。',
@@ -768,9 +772,19 @@ function render(){
   else if(state.view==='system')renderSystem();
 }
 
+function wizardDeviceBadge(){
+  const ble = state.status?.ble;
+  const mdns = state.status?.mdns_host;
+  const id = ble || mdns || '?';
+  return `<div class='t-mute' style='font-size:11px;text-align:center;margin-bottom:18px;font-family:ui-monospace,Menlo,monospace'>
+    ${t('wizard.device_label')}: <span style='color:var(--t1)'>${id}</span>
+  </div>`;
+}
+
 function renderSetup(){
   const m=$('main');
   m.innerHTML=`
+    ${wizardDeviceBadge()}
     <div class=ph><h1>${t('setup.title')}</h1><div class=desc>${t('setup.desc')}</div></div>
     <div class=card>
       <form class=form id=setupF>
@@ -780,12 +794,12 @@ function renderSetup(){
           <input class=input name=wifi_ssid required></label>
         <label>${t('setup.wifi_pass')}
           <input class=input name=wifi_password type=password></label>
-        <button class='btn primary' style='margin-top:6px;justify-content:center'>${t('setup.save')}</button>
+        <button class='btn primary submit'>${t('setup.save')}</button>
         <div class='t-neg' id=msg style='font-size:12px;text-align:center;min-height:14px'></div>
       </form>
     </div>
     <div class=card>
-      <div class=label>${t('setup.restore_label')}</div>
+      <div class=ctitle>${t('setup.restore_label')}</div>
       <div class=row>
         <input type=file id=restoreFile accept='.json' class=input style='flex:1'>
         <button class=btn id=restoreB>${t('setup.restore_btn')}</button>
@@ -819,11 +833,12 @@ function renderSetup(){
 
 function renderLogin(){
   $('main').innerHTML=`
+    ${wizardDeviceBadge()}
     <div class=ph><h1>${t('login.title')}</h1><div class=desc>${t('login.desc')}</div></div>
     <div class=card>
       <form class=form id=loginF>
         <input class=input name=password type=password placeholder='${t('login.admin_ph')}' required autofocus>
-        <button class='btn primary' style='margin-top:6px;justify-content:center'>${t('login.btn')}</button>
+        <button class='btn primary submit'>${t('login.btn')}</button>
         <div class='t-neg' id=msg style='font-size:12px;text-align:center;min-height:14px'></div>
       </form>
     </div>`;
@@ -842,9 +857,9 @@ async function renderOverview(){
       <div class=stat><div class=k>${t('overview.stat_active')}</div><div class=v>—</div><div class=sub>—</div></div>
       <div class=stat><div class=k>${t('overview.stat_bonded')}</div><div class=v>—</div><div class=sub>—</div></div>
     </div>
-    <div class=card><div class=label>${t('overview.today_label')}</div><div id=todayList class=empty>${t('common.loading')}</div></div>
-    <div class=card><div class=label>${t('overview.cal_label')}</div><div id=calBox class=empty>${t('common.loading')}</div></div>
-    <div class=card><div class=label>${t('overview.res_label')}</div><div id=resBox></div></div>`;
+    <div class=card><div class=ctitle>${t('overview.today_label')}</div><div id=todayList class=empty>${t('common.loading')}</div></div>
+    <div class=card><div class=ctitle>${t('overview.cal_label')}</div><div id=calBox class=empty>${t('common.loading')}</div></div>
+    <div class=card><div class=ctitle>${t('overview.res_label')}</div><div id=resBox></div></div>`;
   await loadOverview();
 }
 
