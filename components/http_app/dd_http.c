@@ -178,7 +178,7 @@ esp_err_t dd_http_start(void)
 
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.lru_purge_enable  = true;
-    cfg.max_uri_handlers  = 40;
+    cfg.max_uri_handlers  = 48;
     cfg.stack_size        = 8192;
     cfg.recv_wait_timeout = 30;  // longer for OTA upload
     cfg.send_wait_timeout = 30;
