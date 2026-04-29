@@ -412,7 +412,7 @@ const I18N = {
     'system.section_maintenance':'Maintenance',
     'system.section_maintenance_desc':'Firmware updates, time sync, configuration backup.',
     'system.section_diagnostics':'Diagnostics',
-    'system.section_diagnostics_desc':'Live runtime telemetry and the raw API response.',
+    'system.section_diagnostics_desc':'Live runtime telemetry plus the in-RAM ESP_LOG capture.',
     'system.section_danger':'Danger zone',
     'system.section_danger_desc':'Destructive actions — irreversible once confirmed.',
     'system.ntp_label':'NTP server',
@@ -421,7 +421,6 @@ const I18N = {
     'system.ntp_note':'* Hostname or IP. Must respond to NTP queries on UDP/123. Common picks: pool.ntp.org · time.cloudflare.com · time.apple.com · ntp.aliyun.com',
     'system.reset_stats':'Reset boot/uptime stats',
     'system.reset_stats_confirm':'Reset boot count + total uptime to zero?',
-    'system.show_raw':'Show raw JSON',
     'system.sync_ntp':'Sync NTP',
     'system.logout':'Log out',
     'system.dev_name_label':'BLE device name',
@@ -466,6 +465,12 @@ const I18N = {
     'diag.events_file':'events.jsonl',
     'diag.ota_slot':'OTA slots', 'diag.running':'running', 'diag.next_slot':'next',
     'diag.retention':'Retain {0} days',
+
+    'logs.title':'Recent logs',
+    'logs.desc':'Tail of the in-RAM ring buffer that captures every ESP_LOGI/W/E. Same stream as `make monitor` over USB; useful when the device is remote.',
+    'logs.auto':'Auto-refresh (2s)',
+    'logs.clear':'Clear buffer',
+    'logs.empty':'(no log lines yet)',
   },
   zh: {
     'nav.overview':'总览', 'nav.attendance':'考勤', 'nav.people':'人员', 'nav.system':'系统',
@@ -568,7 +573,7 @@ const I18N = {
     'system.section_maintenance':'维护',
     'system.section_maintenance_desc':'固件升级、时间同步、配置备份。',
     'system.section_diagnostics':'诊断',
-    'system.section_diagnostics_desc':'运行时遥测和原始 API 响应。',
+    'system.section_diagnostics_desc':'运行时遥测和最近 ESP_LOG 输出缓存。',
     'system.section_danger':'危险操作',
     'system.section_danger_desc':'破坏性操作 — 确认后不可撤销。',
     'system.ntp_label':'NTP 服务器',
@@ -577,7 +582,6 @@ const I18N = {
     'system.ntp_note':'* 域名或 IP。需要响应 UDP/123 上的 NTP 查询。常用:pool.ntp.org · time.cloudflare.com · time.apple.com · ntp.aliyun.com',
     'system.reset_stats':'清零启动/运行统计',
     'system.reset_stats_confirm':'把启动次数 + 累计运行时间清零?',
-    'system.show_raw':'查看原始 JSON',
     'system.sync_ntp':'同步时间',
     'system.logout':'退出登录',
     'system.dev_name_label':'BLE 设备名',
@@ -622,6 +626,12 @@ const I18N = {
     'diag.events_file':'events.jsonl',
     'diag.ota_slot':'OTA 分区', 'diag.running':'运行中', 'diag.next_slot':'OTA 写这里',
     'diag.retention':'保留 {0} 天',
+
+    'logs.title':'最近日志',
+    'logs.desc':'内存中环形缓冲区,捕获所有 ESP_LOGI/W/E 输出。和 USB `make monitor` 看到的是同一条流;远程调试时有用。',
+    'logs.auto':'自动刷新 (2 秒)',
+    'logs.clear':'清空缓冲',
+    'logs.empty':'(暂无日志)',
   },
 };
 function pickLang(){
@@ -648,7 +658,7 @@ const NAV=[
   {id:'people',k:'nav.people'},
   {id:'system',k:'nav.system'},
 ];
-let state={view:'overview',workers:[],workersById:{},pairedMode:false,authed:false,setupMode:false,status:null};
+let state={view:'overview',workers:[],workersById:{},pairedMode:false,authed:false,setupMode:false,status:null,logsTimer:null};
 
 function renderNav(host,active){
   host.innerHTML='';
@@ -741,6 +751,8 @@ function render(){
   const wizard = state.setupMode || !state.authed;
   document.body.classList.toggle('wizard', wizard);
   $('topLogoutB').style.display = wizard ? 'none' : '';
+  // Tear down auto-refresh timers when navigating away from System tab.
+  if(state.view!=='system' && state.logsTimer){clearInterval(state.logsTimer);state.logsTimer=null;}
   if (wizard) {
     // No nav in wizard mode — clear stale tab content if rendered earlier.
     $('sidebar').innerHTML = '';
@@ -1234,11 +1246,20 @@ function renderSystem(){
     </div>
     <div class=card>
       <div id=diagTiles class=tiles>${t('common.loading')}</div>
-      <div class=row style='margin-top:14px'>
-        <button class='btn ghost sm' id=diagRefresh>${t('common.refresh')}</button>
-        <button class='btn ghost sm' id=diagRawToggle>${t('system.show_raw')}</button>
+    </div>
+    <div class=card>
+      <div class=ctitle>${t('logs.title')}</div>
+      <div class=cdesc>${t('logs.desc')}</div>
+      <pre id=logsBox class=mono style='background:var(--bg);padding:10px;border-radius:var(--r);overflow:auto;max-height:280px;font-size:11px;color:var(--t2);margin:0;white-space:pre-wrap;word-break:break-all'>${t('common.loading')}</pre>
+      <div class=row style='margin-top:10px;flex-wrap:wrap;gap:8px'>
+        <button class='btn ghost sm' id=logsRefresh title='${t('common.refresh')}'>↻</button>
+        <label class='row' style='gap:6px;cursor:pointer;user-select:none;font-size:12px;color:var(--t2)'>
+          <input type=checkbox id=logsAuto>
+          <span>${t('logs.auto')}</span>
+        </label>
+        <div class=grow></div>
+        <button class='btn ghost sm danger' id=logsClear>${t('logs.clear')}</button>
       </div>
-      <pre id=diagRaw class=mono style='display:none;background:var(--bg);padding:10px;border-radius:var(--r);overflow:auto;max-height:240px;font-size:11px;color:var(--t2);margin:10px 0 0'></pre>
     </div>
 
     <div class=section>
@@ -1254,6 +1275,16 @@ function renderSystem(){
       </div>
     </div>`;
   loadDiag();
+  loadLogs();
+  $('logsRefresh').onclick=loadLogs;
+  $('logsAuto').onchange=()=>{
+    if(state.logsTimer){clearInterval(state.logsTimer);state.logsTimer=null;}
+    if($('logsAuto').checked){state.logsTimer=setInterval(loadLogs,2000);}
+  };
+  $('logsClear').onclick=async()=>{
+    const r=await fetch('/api/system/logs/clear',{method:'POST'});
+    if(r.ok)loadLogs(); else alert(t('common.failed'));
+  };
   fetch('/api/system/device_name').then(r=>r.json()).then(d=>{$('nameInput').value=d.name||'';});
   fetch('/api/system/led').then(r=>r.json()).then(d=>{
     const cb=$('ledToggle');if(!cb)return;
@@ -1288,11 +1319,6 @@ function renderSystem(){
     const r=await fetch('/api/system/ntp_server',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({server:v})});
     if(r.ok){e.target.textContent='✓';setTimeout(()=>e.target.textContent=t('common.save'),1000);}
     else alert(t('common.failed'));
-  };
-  $('diagRefresh').onclick=loadDiag;
-  $('diagRawToggle').onclick=()=>{
-    const p=$('diagRaw');
-    p.style.display = p.style.display==='none' ? 'block' : 'none';
   };
   $('ntpResync').onclick=async e=>{await fetch('/api/system/time_resync',{method:'POST'});
     e.target.textContent='✓';setTimeout(()=>e.target.textContent='↻',1500);};
@@ -1393,7 +1419,20 @@ async function loadDiag(){
         </div>`;
       }).join('')}
     </div>`;
-  $('diagRaw').textContent=JSON.stringify({status:state.status,diag:r},null,2);
+}
+
+async function loadLogs(){
+  const box=$('logsBox');if(!box)return;
+  try{
+    const r=await fetch('/api/system/logs',{cache:'no-store'});
+    if(!r.ok){box.textContent=t('common.load_failed');return;}
+    let txt=await r.text();
+    // ESP_LOG colorises every line with ANSI escapes (e.g. \x1b[0;32m … \x1b[0m).
+    // Strip them — <pre> renders the literal "[0;32m" otherwise.
+    txt = txt.replace(/\x1b\[[0-9;]*m/g, '');
+    box.textContent=txt.length?txt:t('logs.empty');
+    box.scrollTop=box.scrollHeight;
+  }catch(_){box.textContent=t('common.load_failed');}
 }
 
 function waitForReboot(){

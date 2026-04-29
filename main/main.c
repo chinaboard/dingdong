@@ -21,6 +21,7 @@
 #include "dd_worker.h"
 #include "dd_event.h"
 #include "dd_led.h"
+#include "dd_log.h"
 
 static const char *TAG = "dingdong";
 
@@ -188,6 +189,10 @@ void app_main(void)
     // Give USB Serial/JTAG host time to re-enumerate after a flash so we can
     // capture early boot logs from a non-TTY shell.
     vTaskDelay(pdMS_TO_TICKS(5000));
+
+    // Hook ESP_LOG into a 4 KB ring buffer first so the boot banner + every
+    // subsequent log call lands in the buffer that /api/system/logs serves.
+    dd_log_init();
 
     ESP_LOGI(TAG, "==========================================");
     ESP_LOGI(TAG, " dingdong-fw v%s booting", esp_app_get_description()->version);

@@ -213,6 +213,8 @@ esp_err_t dd_http_start(void)
         { .uri = "/api/system/ntp_server",    .method = HTTP_GET,  .handler = ntp_server_get    },
         { .uri = "/api/system/ntp_server",    .method = HTTP_POST, .handler = ntp_server_post   },
         { .uri = "/api/system/metrics_reset", .method = HTTP_POST, .handler = metrics_reset_post },
+        { .uri = "/api/system/logs",          .method = HTTP_GET,  .handler = logs_get          },
+        { .uri = "/api/system/logs/clear",    .method = HTTP_POST, .handler = logs_clear_post   },
         { .uri = "/api/system/backup",        .method = HTTP_GET,  .handler = backup_get        },
         { .uri = "/api/system/restore",       .method = HTTP_POST, .handler = restore_post      },
         { .uri = "/api/system/diag",          .method = HTTP_GET,  .handler = diag_get          },

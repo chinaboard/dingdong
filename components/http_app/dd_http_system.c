@@ -23,6 +23,7 @@
 #include "dd_session.h"
 #include "dd_ble.h"
 #include "dd_led.h"
+#include "dd_log.h"
 #include "dd_storage.h"
 #include "dd_time.h"
 #include "dd_wifi.h"
@@ -395,6 +396,43 @@ esp_err_t metrics_reset_post(httpd_req_t *req)
     if (require_auth(req) != ESP_OK) return ESP_OK;
     esp_err_t err = dd_metrics_reset();
     if (err != ESP_OK) return reply_text(req, "500 Internal Server Error", "reset failed");
+    return reply_text(req, "200 OK", "ok");
+}
+
+// ---------- runtime logs ----------
+//
+// Returns the tail of the in-RAM ring buffer captured by dd_log. Caller may
+// pass `?bytes=N` to cap the response (default = full buffer).
+
+esp_err_t logs_get(httpd_req_t *req)
+{
+    if (require_auth(req) != ESP_OK) return ESP_OK;
+
+    size_t cap = DD_LOG_BUF_BYTES;
+    char qs[64];
+    if (httpd_req_get_url_query_str(req, qs, sizeof(qs)) == ESP_OK) {
+        char val[16];
+        if (httpd_query_key_value(qs, "bytes", val, sizeof(val)) == ESP_OK) {
+            int n = atoi(val);
+            if (n > 0 && (size_t)n < cap) cap = n;
+        }
+    }
+
+    char *buf = malloc(cap + 1);
+    if (!buf) return reply_text(req, "500 Internal Server Error", "no mem");
+    size_t got = dd_log_read_tail(buf, cap);
+    buf[got] = '\0';
+
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    esp_err_t r = httpd_resp_send(req, buf, got);
+    free(buf);
+    return r;
+}
+
+esp_err_t logs_clear_post(httpd_req_t *req)
+{
+    if (require_auth(req) != ESP_OK) return ESP_OK;
+    dd_log_clear();
     return reply_text(req, "200 OK", "ok");
 }
 
