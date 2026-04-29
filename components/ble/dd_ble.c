@@ -36,6 +36,7 @@ static char     s_device_name[20] = "dingdong-XXXX";
 static uint8_t  s_own_addr_type;
 static bool     s_advertising = false;
 static esp_timer_handle_t s_adv_restart_timer = NULL;
+static esp_timer_handle_t s_scan_restart_timer = NULL;
 
 // ---------- presence (scan-based + connect-probe fallback) ----------
 // Continuous scan resolves iPhone RPAs to identity via IRK exchanged during
@@ -52,10 +53,10 @@ static esp_timer_handle_t s_adv_restart_timer = NULL;
 // immediately disconnect. If the connect attempt fails or times out, the
 // timer eventually crosses PRESENCE_TIMEOUT_MS and OUT fires normally.
 #define PRESENCE_MAX           BOND_MAX_LIST
-#define PRESENCE_TIMEOUT_MS    120000   // 2 min total before OUT
+#define PRESENCE_TIMEOUT_MS    300000   // 5 min total before OUT
 #define PRESENCE_PROBE_AFTER_MS 60000   // start probing at 1 min stale
 #define PRESENCE_PROBE_TIMEOUT_MS 6000  // give the probe ~6s to settle
-#define PRESENCE_PROBE_COOLDOWN_MS 30000  // gap between probes for one peer
+#define PRESENCE_PROBE_COOLDOWN_MS 60000  // gap between probes for one peer
 #define PRESENCE_TICK_MS       1000
 
 typedef struct {
@@ -142,6 +143,10 @@ static void presence_seen_addr(const uint8_t addr[6])
 // a clean "is this device still around" signal. We disconnect immediately
 // — we never had any reason to stay connected.
 
+// Forward decls — probe stops/restarts the scanner around its connect.
+static void start_scanning(void);
+static void schedule_scan_restart(int delay_ms);
+
 static int probe_event_cb(struct ble_gap_event *event, void *arg)
 {
     intptr_t slot_idx = (intptr_t)arg;
@@ -155,11 +160,13 @@ static int probe_event_cb(struct ble_gap_event *event, void *arg)
             s->probe_handle = event->connect.conn_handle;
             s->last_seen_us = esp_timer_get_time();  // proof of presence
             // Don't fire IN/OUT machinery — we already had `present=true`,
-            // we're just keeping it that way. Disconnect immediately.
+            // we're just keeping it that way. Disconnect immediately;
+            // scanner restart deferred until DISCONNECT below.
             ble_gap_terminate(event->connect.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
         } else {
             ESP_LOGI(TAG, "probe FAIL slot=%d status=%d", (int)slot_idx, event->connect.status);
             s->probing = false;
+            schedule_scan_restart(50);  // probe over, scanner can resume
         }
         return 0;
 
@@ -167,6 +174,7 @@ static int probe_event_cb(struct ble_gap_event *event, void *arg)
         if (s->probe_handle == event->disconnect.conn.conn_handle) {
             s->probe_handle = 0xFFFF;
             s->probing = false;
+            schedule_scan_restart(50);  // probe over, scanner can resume
         }
         return 0;
 
@@ -184,10 +192,9 @@ static void presence_probe_start(int slot_idx)
     ble_addr_t peer = { .type = BLE_OWN_ADDR_PUBLIC };
     memcpy(peer.val, s->addr, 6);
 
-    // Bonds are stored with type from peer_id_addr — try public first; if
-    // it was actually a random-static, NimBLE will surface that via the
-    // bond store lookup during connect. For our use case (iPhone identity
-    // address) public is correct.
+    // Bonds are stored with the type NimBLE captured during pairing —
+    // for an iPhone bond that's typically random-static (0x01), not
+    // public. Look it up so ble_gap_connect picks the right addr type.
     ble_addr_t peers[BOND_MAX_LIST];
     int n = 0;
     if (ble_store_util_bonded_peers(peers, &n, BOND_MAX_LIST) == 0) {
@@ -199,6 +206,17 @@ static void presence_probe_start(int slot_idx)
         }
     }
 
+    // ble_gap_connect cannot run while ble_gap_ext_disc is active —
+    // they share the controller's scanning resource. Stop the scanner
+    // first; it'll be restarted from probe_event_cb's CONNECT-fail or
+    // DISCONNECT path (whichever ends the probe). Without this stop the
+    // connect call returns BLE_HS_EBUSY (rc=15) and the probe never
+    // actually attempts anything.
+    int dc = ble_gap_disc_cancel();
+    if (dc != 0 && dc != BLE_HS_EALREADY) {
+        ESP_LOGW(TAG, "probe slot=%d disc_cancel rc=%d", slot_idx, dc);
+    }
+
     s->probing = true;
     s->probe_handle = 0xFFFF;
     s->last_probe_us = esp_timer_get_time();
@@ -206,9 +224,11 @@ static void presence_probe_start(int slot_idx)
     int rc = ble_gap_connect(s_own_addr_type, &peer,
                              PRESENCE_PROBE_TIMEOUT_MS, NULL,
                              probe_event_cb, (void *)(intptr_t)slot_idx);
+    ESP_LOGI(TAG, "probe slot=%d ble_gap_connect rc=%d (peer type=%d)",
+             slot_idx, rc, peer.type);
     if (rc != 0) {
-        ESP_LOGI(TAG, "probe slot=%d ble_gap_connect rc=%d", slot_idx, rc);
         s->probing = false;
+        schedule_scan_restart(50);  // restore scanner since probe didn't take
     }
 }
 
@@ -249,7 +269,7 @@ static void presence_tick_cb(void *arg)
             }
         }
 
-        if (since_ms > PRESENCE_TIMEOUT_MS) {
+        if (since_ms > PRESENCE_TIMEOUT_MS && !s_presence[i].probing) {
             s_presence[i].present = false;
             ESP_LOGI(TAG, "presence OUT %02x:%02x:%02x:%02x:%02x:%02x (no adv for %llds)",
                      s_presence[i].addr[0], s_presence[i].addr[1],
@@ -319,6 +339,27 @@ static void start_scanning(void)
                                      (uint64_t)PRESENCE_TICK_MS * 1000);
         }
     }
+}
+
+// Defer-restart for the scanner. The connect-probe stops scanning to free
+// the controller's scan resource, then needs to restart it from inside a
+// GAP CONNECT/DISCONNECT callback — same EBUSY-race danger as adv restart,
+// so funnel through esp_timer.
+static void scan_restart_cb(void *arg)
+{
+    start_scanning();
+}
+static void schedule_scan_restart(int delay_ms)
+{
+    if (s_scan_restart_timer == NULL) {
+        const esp_timer_create_args_t args = {
+            .callback = &scan_restart_cb,
+            .name     = "scan_restart",
+        };
+        if (esp_timer_create(&args, &s_scan_restart_timer) != ESP_OK) return;
+    }
+    esp_timer_stop(s_scan_restart_timer);
+    esp_timer_start_once(s_scan_restart_timer, (uint64_t)delay_ms * 1000);
 }
 
 // Defer-restart helper. Calling start_advertising synchronously inside the
@@ -544,6 +585,19 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
                     int sec_rc = ble_gap_security_initiate(event->connect.conn_handle);
                     if (sec_rc != 0) {
                         ESP_LOGW(TAG, "security_initiate rc=%d", sec_rc);
+                    }
+                }
+                // iOS auto-reconnects to known HID peripherals roughly
+                // every few minutes when the screen is off. That CONNECT
+                // is a stronger "still here" signal than scanner adv —
+                // refresh last_seen for the matching presence slot so the
+                // OUT timer doesn't fire on a phone that's actively
+                // talking to us.
+                for (int i = 0; i < PRESENCE_MAX; i++) {
+                    if (s_presence[i].used &&
+                        memcmp(s_presence[i].addr, desc.peer_id_addr.val, 6) == 0) {
+                        s_presence[i].last_seen_us = esp_timer_get_time();
+                        break;
                     }
                 }
             }
