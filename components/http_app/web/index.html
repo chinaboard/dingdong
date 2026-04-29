@@ -244,11 +244,38 @@ details[open]>summary::before{content:'▾ '}
 /* System tab section grouping. Replaces the old single-column wall-of-cards
    with header-separated sections; small settings cards pair up two-per-row
    on wide screens, stack on mobile. */
-.section{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);font-weight:600;margin:24px 4px 8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section{display:flex;flex-direction:column;gap:2px;margin:24px 4px 10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
 .section:first-child{margin-top:0}
+.section .h{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--t2);font-weight:600}
+.section .d{font-size:11px;color:var(--t3);font-weight:400}
 .s-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:720px){.s-grid{grid-template-columns:1fr}}
 .s-grid > .card{margin-top:0}
+
+/* Card header convention: every card titles itself with .ctitle (small uppercase
+   muted, like .label). Optional .cdesc sits directly under for a 1-line hint.
+   Replaces the historical mix of <h2> + inline-styled descriptions. */
+.ctitle{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);font-weight:600;margin:0 0 4px}
+.cdesc{font-size:11px;color:var(--t2);margin:0 0 12px;line-height:1.5}
+.cdesc:last-child{margin-bottom:0}
+
+/* Segmented control — two/three-way exclusive tabs that look like a pill.
+   Used in attendance for Raw/Sessions view switch. */
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--border-strong);border-radius:var(--r);padding:2px;gap:0}
+.seg button{background:transparent;border:0;padding:5px 12px;font-size:12px;color:var(--t2);border-radius:4px;cursor:pointer;font-weight:500}
+.seg button.on{background:var(--surface-2);color:var(--t1);box-shadow:0 1px 0 rgba(0,0,0,.3)}
+.seg button:hover:not(.on){color:var(--t1)}
+
+/* Icon-only button for topbar (logout). Square, transparent, matches langsel
+   visual weight without inheriting its select styling. */
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;background:transparent;border:1px solid var(--border-strong);border-radius:var(--r);color:var(--t2);cursor:pointer;font-size:12px;padding:0}
+.iconbtn:hover{color:var(--t1);border-color:rgba(255,255,255,.18)}
+
+/* Worker row: name + category on top, meta + actions below (mobile-friendly). */
+.wrow{padding:10px 0;border-bottom:1px solid var(--border)}
+.wrow:last-child{border-bottom:0}
+.wrow-meta{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--t3);margin-top:6px;font-variant-numeric:tabular-nums;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.wrow-meta .sep{color:var(--border-strong)}
 </style>
 </head>
 <body>
@@ -265,7 +292,7 @@ details[open]>summary::before{content:'▾ '}
       <option value=en>EN</option>
       <option value=zh>中文</option>
     </select>
-    <button id=topLogoutB class=langsel style='display:none' title='Log out'>⏻</button>
+    <button id=topLogoutB class=iconbtn style='display:none' title='Log out'>⏻</button>
   </header>
 
   <nav class=mobiletabs id=mobiletabs></nav>
@@ -381,9 +408,13 @@ const I18N = {
     'system.desc':'Diagnostics, device name, firmware update, backup, danger zone.',
     'system.diag_label':'Diagnostics',
     'system.section_settings':'Settings',
+    'system.section_settings_desc':'Device behavior knobs — kept persistent across reboots.',
     'system.section_maintenance':'Maintenance',
+    'system.section_maintenance_desc':'Firmware updates, time sync, configuration backup.',
     'system.section_diagnostics':'Diagnostics',
+    'system.section_diagnostics_desc':'Live runtime telemetry and the raw API response.',
     'system.section_danger':'Danger zone',
+    'system.section_danger_desc':'Destructive actions — irreversible once confirmed.',
     'system.ntp_label':'NTP server',
     'system.ntp_synced':'Synced {0}.',
     'system.ntp_unsynced':'Not synced yet — check server reachability.',
@@ -406,6 +437,7 @@ const I18N = {
     'system.pw_required':'Current password + new password (≥8 chars) required',
     'system.pw_changed':'Changed. Please log in again.',
     'system.ota_label':'Firmware OTA',
+    'system.ota_desc':'Currently running v{0}. Pick a .bin built from `make build`; device auto-restarts after flashing and rolls back if it panics within 60s.',
     'system.upload_flash':'Upload & flash',
     'system.pick_bin':'Pick a .bin file',
     'system.ota_confirm':'Upload {0} KB firmware and flash? Device auto-restarts when done.',
@@ -433,7 +465,7 @@ const I18N = {
     'diag.disk':'Disk',
     'diag.events_file':'events.jsonl',
     'diag.ota_slot':'OTA slots', 'diag.running':'running', 'diag.next_slot':'next',
-    'diag.foot':'events.jsonl: retain {0} days · safety cap {1}',
+    'diag.retention':'Retain {0} days',
   },
   zh: {
     'nav.overview':'总览', 'nav.attendance':'考勤', 'nav.people':'人员', 'nav.system':'系统',
@@ -532,9 +564,13 @@ const I18N = {
     'system.desc':'诊断信息、设备名、固件升级、备份与危险操作。',
     'system.diag_label':'诊断信息',
     'system.section_settings':'设置',
+    'system.section_settings_desc':'设备行为相关的可持久化配置。',
     'system.section_maintenance':'维护',
+    'system.section_maintenance_desc':'固件升级、时间同步、配置备份。',
     'system.section_diagnostics':'诊断',
+    'system.section_diagnostics_desc':'运行时遥测和原始 API 响应。',
     'system.section_danger':'危险操作',
+    'system.section_danger_desc':'破坏性操作 — 确认后不可撤销。',
     'system.ntp_label':'NTP 服务器',
     'system.ntp_synced':'已同步 ({0})。',
     'system.ntp_unsynced':'尚未同步 — 检查服务器是否可达。',
@@ -557,6 +593,7 @@ const I18N = {
     'system.pw_required':'需要填写当前密码 + 新密码 (≥8 位)',
     'system.pw_changed':'已修改,请重新登录。',
     'system.ota_label':'固件 OTA',
+    'system.ota_desc':'当前运行 v{0}。请上传 `make build` 产出的 .bin 文件;烧录完会自动重启,60 秒内 panic 会自动回滚。',
     'system.upload_flash':'上传并烧录',
     'system.pick_bin':'请选择 .bin 文件',
     'system.ota_confirm':'上传 {0} KB 固件并烧录?完成后会自动重启。',
@@ -584,7 +621,7 @@ const I18N = {
     'diag.disk':'磁盘',
     'diag.events_file':'events.jsonl',
     'diag.ota_slot':'OTA 分区', 'diag.running':'运行中', 'diag.next_slot':'OTA 写这里',
-    'diag.foot':'events.jsonl:保留 {0} 天 · 大小上限 {1}',
+    'diag.retention':'保留 {0} 天',
   },
 };
 function pickLang(){
@@ -894,16 +931,19 @@ async function renderAttendance(){
   $('main').innerHTML=`
     <div class=ph><h1>${t('attendance.title')}</h1><div class=desc>${t('attendance.desc')}</div></div>
     <div class=card>
-      <div class=row style='margin-bottom:12px;flex-wrap:wrap'>
+      <div class=row style='margin-bottom:12px;flex-wrap:wrap;gap:10px'>
+        <div class=seg id=viewSeg>
+          <button data-mode=raw class='${state.pairedMode?'':'on'}'>${t('attendance.raw_view')}</button>
+          <button data-mode=paired class='${state.pairedMode?'on':''}'>${t('attendance.sessions_view')}</button>
+        </div>
         <select class=input id=workerFilter style='min-width:140px'><option value=''>${t('attendance.all_workers')}</option></select>
-        <button class=btn id=pairToggle>${state.pairedMode?t('attendance.raw_view'):t('attendance.sessions_view')}</button>
         <div class=grow></div>
-        <button class='btn ghost' id=refreshEvB>${t('common.refresh')}</button>
+        <button class='btn ghost sm' id=refreshEvB title='${t('common.refresh')}'>↻</button>
       </div>
       <div id=eventsList class=empty>${t('common.loading')}</div>
     </div>
     <div class=card>
-      <div class=label>${t('attendance.export_label')}</div>
+      <div class=ctitle>${t('attendance.export_label')}</div>
       <div class=row style='margin-bottom:8px;flex-wrap:wrap'>
         <span class='mono t-mute'>${t('attendance.from')}</span>
         <input id=expFrom type=date class=input style='max-width:160px'>
@@ -916,9 +956,12 @@ async function renderAttendance(){
         <button class='btn ghost' id=expJsonl>${t('attendance.jsonl')}</button>
       </div>
     </div>
-    <div class=section>${t('system.section_danger')}</div>
+    <div class=section>
+      <div class=h>${t('system.section_danger')}</div>
+      <div class=d>${t('system.section_danger_desc')}</div>
+    </div>
     <div class=card>
-      <div class='t-mute' style='font-size:12px;margin-bottom:10px'>${t('attendance.wipe_hint')}</div>
+      <div class=cdesc>${t('attendance.wipe_hint')}</div>
       <button class='btn danger' id=wipeB>${t('attendance.wipe')}</button>
     </div>`;
 
@@ -931,7 +974,12 @@ async function renderAttendance(){
   wf.innerHTML=`<option value="">${t('attendance.all_workers')}</option>`+
     state.workers.map(w=>`<option value=${w.id}>${escAttr(w.name)} (id=${w.id})</option>`).join('');
   wf.onchange=loadEvents;
-  $('pairToggle').onclick=()=>{state.pairedMode=!state.pairedMode;renderAttendance();};
+  document.querySelectorAll('#viewSeg button').forEach(b=>b.onclick=()=>{
+    const next = b.dataset.mode==='paired';
+    if(state.pairedMode===next)return;
+    state.pairedMode=next;
+    renderAttendance();
+  });
   $('refreshEvB').onclick=loadEvents;
   $('wipeB').onclick=async()=>{if(!confirm(t('attendance.wipe_confirm')))return;
     await fetch('/api/events/wipe',{method:'POST'});loadEvents();};
@@ -989,19 +1037,23 @@ async function renderPeople(){
   $('main').innerHTML=`
     <div class=ph><h1>${t('people.title')}</h1><div class=desc>${t('people.desc')}</div></div>
     <div class=card>
-      <div class='row between' style='margin-bottom:12px'>
-        <div><h2 style='margin:0'>${t('people.pairing_title')}</h2><div class='t-mute' style='font-size:12px;margin-top:2px'>${t('people.pairing_desc')}</div></div>
+      <div class='row between' style='margin-bottom:6px;align-items:flex-start'>
+        <div>
+          <div class=ctitle>${t('people.pairing_title')}</div>
+          <div class=cdesc style='margin-bottom:0'>${t('people.pairing_desc')}</div>
+        </div>
         <button class='btn primary' id=pairB>${t('people.start')}</button>
       </div>
       <div id=pairBox></div>
     </div>
     <div class=card>
-      <h2 style='margin:0 0 12px'>${t('people.workers_title')} (<span id=workersCount>0</span>)</h2>
+      <div class=ctitle>${t('people.workers_title')} · <span id=workersCount class=t-mute style='font-weight:400'>0</span></div>
       <div id=workersList class=empty>${t('common.loading')}</div>
     </div>`;
   $('pairB').onclick=async()=>{
     const r=await fetch('/api/pairing/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ttl_ms:30000})});
     if(!r.ok){alert(t('people.start_failed'));return;}
+    $('pairB').disabled=true;
     pollPair();
   };
   loadWorkers();
@@ -1010,10 +1062,14 @@ async function renderPeople(){
 function pollPair(){
   const box=$('pairBox');
   let confirming=false;
+  const finish=()=>{
+    if($('pairB')){$('pairB').disabled=false;}
+    loadWorkers();
+  };
   const tick=async()=>{
     if(confirming){setTimeout(tick,500);return;}
     const s=await fetch('/api/pairing/status').then(r=>r.json()).catch(()=>({active:false}));
-    if(!s.active){box.innerHTML=`<div class="t-mute" style="font-size:12px;margin-top:8px">${t('people.window_closed')}</div>`;loadWorkers();return;}
+    if(!s.active){box.innerHTML=`<div class="t-mute" style="font-size:12px;margin-top:8px">${t('people.window_closed')}</div>`;finish();return;}
     const sec=Math.ceil(s.remaining_ms/1000);
     const dev=state.status?.ble||'dingdong-XXXX';
     if(s.numcmp&&s.numcmp>0){
@@ -1025,7 +1081,7 @@ function pollPair(){
         <div class=row style='justify-content:center;margin-top:12px'>
           <button class='btn ghost sm' id=cancelB>${t('people.cancel_pair')}</button>
         </div>`;
-      $('cancelB').onclick=async()=>{await fetch('/api/pairing/cancel',{method:'POST'});box.innerHTML='';};
+      $('cancelB').onclick=async()=>{await fetch('/api/pairing/cancel',{method:'POST'});box.innerHTML='';finish();};
     }else{
       box.innerHTML=`<div style='text-align:center;padding:18px 0'>
         <div style='font-size:14px;color:var(--t1)'>${t('people.tap_html',dev)}</div>
@@ -1035,7 +1091,7 @@ function pollPair(){
       <div class=row style='justify-content:center;margin-top:8px'>
         <button class='btn ghost sm' id=cancelB>${t('people.cancel_pair')}</button>
       </div>`;
-      $('cancelB').onclick=async()=>{await fetch('/api/pairing/cancel',{method:'POST'});box.innerHTML='';};
+      $('cancelB').onclick=async()=>{await fetch('/api/pairing/cancel',{method:'POST'});box.innerHTML='';finish();};
     }
     setTimeout(tick,1000);
   };
@@ -1052,7 +1108,7 @@ async function loadWorkers(){
   const box=$('workersList');if(!box)return;
   if(state.workers.length===0){box.innerHTML=`<div class=empty>${t('people.no_workers')}</div>`;return;}
   box.innerHTML=state.workers.map(w=>`
-    <div style='padding:10px 0;border-bottom:1px solid var(--border)' data-w=${w.id}>
+    <div class=wrow data-w=${w.id}>
       <div class=row style='flex-wrap:wrap'>
         <input class='input w-name' data-id=${w.id} data-field=name value='${escAttr(w.name)}' placeholder='${t('people.name_ph')}'>
         <input class='input w-cat' data-id=${w.id} data-field=category value='${escAttr(w.category)}' placeholder='${t('people.cat_ph')}'>
@@ -1062,7 +1118,11 @@ async function loadWorkers(){
         <div class=grow></div>
         <button class='btn sm danger revokeW' data-id=${w.id}>${t('people.delete')}</button>
       </div>
-      <div class='mono t-mute' style='font-size:11px;margin-top:4px'>id=${w.id} · ${w.addr} · ${w.bonded?`<span class=t-pos>${t('people.bonded')}</span>`:`<span class=t-mute>${t('people.not_bonded')}</span>`}</div>
+      <div class=wrow-meta>
+        <span>id=${w.id}</span><span class=sep>·</span>
+        <span>${w.addr}</span><span class=sep>·</span>
+        <span>${w.bonded?`<span class=t-pos>${t('people.bonded')}</span>`:`<span class=t-mute>${t('people.not_bonded')}</span>`}</span>
+      </div>
     </div>`).join('');
   document.querySelectorAll('.saveW').forEach(b=>b.onclick=async()=>{
     const id=+b.dataset.id;
@@ -1085,10 +1145,13 @@ function renderSystem(){
   $('main').innerHTML=`
     <div class=ph><h1>${t('system.title')}</h1><div class=desc>${t('system.desc')}</div></div>
 
-    <div class=section>${t('system.section_settings')}</div>
+    <div class=section>
+      <div class=h>${t('system.section_settings')}</div>
+      <div class=d>${t('system.section_settings_desc')}</div>
+    </div>
     <div class=s-grid>
       <div class=card>
-        <div class=label>${t('system.led_label')}</div>
+        <div class=ctitle>${t('system.led_label')}</div>
         <label class=row style='gap:8px;cursor:pointer;user-select:none'>
           <input type=checkbox id=ledToggle disabled>
           <span>${t('system.led_toggle')}</span>
@@ -1096,7 +1159,7 @@ function renderSystem(){
         <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.led_note')}</div>
       </div>
       <div class=card>
-        <div class=label>${t('system.presence_label')}</div>
+        <div class=ctitle>${t('system.presence_label')}</div>
         <div class=row>
           <input class=input id=presenceTimeout type=number min=30 max=600 step=5 style='max-width:100px'>
           <span class='t-mute' style='font-size:12px'>${t('system.presence_unit')}</span>
@@ -1107,7 +1170,7 @@ function renderSystem(){
       </div>
     </div>
     <div class=card>
-      <div class=label>${t('system.dev_name_label')}</div>
+      <div class=ctitle>${t('system.dev_name_label')}</div>
       <div class=row>
         <input class=input id=nameInput placeholder='dingdong-XXXX' maxlength=18 style='flex:1'>
         <button class=btn id=nameSaveB>${t('common.save')}</button>
@@ -1115,7 +1178,7 @@ function renderSystem(){
       <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.dev_name_note')}</div>
     </div>
     <div class=card>
-      <div class=label>${t('system.change_pw_label')}</div>
+      <div class=ctitle>${t('system.change_pw_label')}</div>
       <form class=form id=changePwF>
         <label>${t('system.cur_pw')}<input class=input id=oldPw type=password autocomplete=current-password></label>
         <label>${t('system.new_pw')}<input class=input id=newPw type=password autocomplete=new-password></label>
@@ -1123,9 +1186,13 @@ function renderSystem(){
       </form>
     </div>
 
-    <div class=section>${t('system.section_maintenance')}</div>
+    <div class=section>
+      <div class=h>${t('system.section_maintenance')}</div>
+      <div class=d>${t('system.section_maintenance_desc')}</div>
+    </div>
     <div class=card>
-      <div class=label>${t('system.ota_label')}</div>
+      <div class=ctitle>${t('system.ota_label')}</div>
+      <div class=cdesc>${t('system.ota_desc',state.status?.version||'?')}</div>
       <div class=row>
         <input type=file id=otaFile accept='.bin' class=input style='flex:1'>
         <button class='btn primary' id=otaB>${t('system.upload_flash')}</button>
@@ -1135,7 +1202,7 @@ function renderSystem(){
     </div>
     <div class=s-grid>
       <div class=card>
-        <div class=label>${t('system.ntp_label')}</div>
+        <div class=ctitle>${t('system.ntp_label')}</div>
         <div class=row>
           <input class=input id=ntpServer list=ntpServers placeholder='ntp.aliyun.com' style='flex:1'>
           <datalist id=ntpServers>
@@ -1155,31 +1222,33 @@ function renderSystem(){
         <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.ntp_note')}</div>
       </div>
       <div class=card>
-        <div class=label>${t('system.backup_label')}</div>
-        <div class='t-mute' style='font-size:11px;margin-bottom:8px'>${t('system.backup_note')}</div>
+        <div class=ctitle>${t('system.backup_label')}</div>
+        <div class=cdesc>${t('system.backup_note')}</div>
         <a href='/api/system/backup' download><button class=btn>${t('system.download_backup')}</button></a>
       </div>
     </div>
 
-    <div class=section>${t('system.section_diagnostics')}</div>
+    <div class=section>
+      <div class=h>${t('system.section_diagnostics')}</div>
+      <div class=d>${t('system.section_diagnostics_desc')}</div>
+    </div>
     <div class=card>
       <div id=diagTiles class=tiles>${t('common.loading')}</div>
-      <div id=diagFoot class='t-mute' style='font-size:11px;margin-top:10px'></div>
-      <details style='margin-top:10px'>
-        <summary class='t-mute' style='font-size:11px'>${t('system.show_raw')}</summary>
-        <pre id=diagRaw class=mono style='background:var(--bg);padding:10px;border-radius:var(--r);overflow:auto;max-height:240px;font-size:11px;color:var(--t2);margin:8px 0 0'></pre>
-      </details>
-      <div class=row style='margin-top:12px'>
-        <button class='btn ghost' id=diagRefresh>${t('common.refresh')}</button>
-        <div class=grow></div>
-        <button class='btn ghost sm danger' id=metricsResetB>${t('system.reset_stats')}</button>
+      <div class=row style='margin-top:14px'>
+        <button class='btn ghost sm' id=diagRefresh>${t('common.refresh')}</button>
+        <button class='btn ghost sm' id=diagRawToggle>${t('system.show_raw')}</button>
       </div>
+      <pre id=diagRaw class=mono style='display:none;background:var(--bg);padding:10px;border-radius:var(--r);overflow:auto;max-height:240px;font-size:11px;color:var(--t2);margin:10px 0 0'></pre>
     </div>
 
-    <div class=section>${t('system.section_danger')}</div>
+    <div class=section>
+      <div class=h>${t('system.section_danger')}</div>
+      <div class=d>${t('system.section_danger_desc')}</div>
+    </div>
     <div class=card>
-      <div class=row>
-        <button class=btn id=restartB>${t('system.restart')}</button>
+      <div class=row style='flex-wrap:wrap;gap:8px'>
+        <button class='btn ghost' id=restartB>${t('system.restart')}</button>
+        <button class='btn ghost sm danger' id=metricsResetB>${t('system.reset_stats')}</button>
         <div class=grow></div>
         <button class='btn danger' id=factoryB>${t('system.factory')}</button>
       </div>
@@ -1221,6 +1290,10 @@ function renderSystem(){
     else alert(t('common.failed'));
   };
   $('diagRefresh').onclick=loadDiag;
+  $('diagRawToggle').onclick=()=>{
+    const p=$('diagRaw');
+    p.style.display = p.style.display==='none' ? 'block' : 'none';
+  };
   $('ntpResync').onclick=async e=>{await fetch('/api/system/time_resync',{method:'POST'});
     e.target.textContent='✓';setTimeout(()=>e.target.textContent='↻',1500);};
   $('metricsResetB').onclick=async e=>{
@@ -1306,7 +1379,8 @@ async function loadDiag(){
       <div class=k>${t('diag.disk')}</div>
       <div class=v>${fmtBytes(fs.used)}<span class=u>/ ${fmtBytes(fs.total)}</span></div>
       <div class=barwrap><div class='bar ${fsCls}' style='width:${fsPct}%'></div></div>
-      <div class=sub>${t('diag.events_file')} ${fmtBytes(fs.events_file_bytes)}</div>
+      <div class=sub>${t('diag.events_file')} ${fmtBytes(fs.events_file_bytes)} <span class=t-mute>/ ${fmtBytes(r.events_retention?.max_bytes_cap||0)}</span></div>
+      <div class=sub>${t('diag.retention',r.events_retention?.retention_days||0)}</div>
     </div>
     <div class=tile>
       <div class=k>${t('diag.ota_slot')}</div>
@@ -1319,9 +1393,6 @@ async function loadDiag(){
         </div>`;
       }).join('')}
     </div>`;
-  $('diagFoot').innerHTML=t('diag.foot',
-    r.events_retention?.retention_days||0,
-    fmtBytes(r.events_retention?.max_bytes_cap||0));
   $('diagRaw').textContent=JSON.stringify({status:state.status,diag:r},null,2);
 }
 
