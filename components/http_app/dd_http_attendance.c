@@ -133,7 +133,10 @@ typedef struct {
 static void csv_field_quote(httpd_req_t *req, const char *s)
 {
     if (!s || !s[0]) return;
-    if (strchr(s, ',') || strchr(s, '"') || strchr(s, '\n')) {
+    // CSV quoting per RFC 4180: any of comma / double-quote / CR / LF triggers
+    // quoting, and embedded double-quotes are doubled. CR is easy to forget but
+    // worker names and notes go through user input — must be safe.
+    if (strchr(s, ',') || strchr(s, '"') || strchr(s, '\n') || strchr(s, '\r')) {
         httpd_resp_send_chunk(req, "\"", 1);
         const char *p = s;
         while (*p) {
