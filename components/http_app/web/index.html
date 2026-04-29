@@ -4,6 +4,7 @@
 <meta charset='utf-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>dingdong</title>
+<link rel='icon' href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%238B98E6'/%3E%3Ccircle cx='16' cy='13' r='5' fill='%23fff'/%3E%3Cpath d='M11 22 Q16 18 21 22 L21 26 Q16 22 11 26 Z' fill='%23fff'/%3E%3C/svg%3E">
 <style>
 :root{
   color-scheme:dark;
@@ -254,10 +255,12 @@ details[open]>summary::before{content:'▾ '}
 
 /* Card header convention: every card titles itself with .ctitle (small uppercase
    muted, like .label). Optional .cdesc sits directly under for a 1-line hint.
-   Replaces the historical mix of <h2> + inline-styled descriptions. */
+   .note is for footnote-y `*` text under input fields — the most repeated
+   inline style in the project. */
 .ctitle{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);font-weight:600;margin:0 0 4px}
 .cdesc{font-size:11px;color:var(--t2);margin:0 0 12px;line-height:1.5}
 .cdesc:last-child{margin-bottom:0}
+.note{font-size:11px;color:var(--t2);margin-top:6px;line-height:1.5}
 
 /* Segmented control — two/three-way exclusive tabs that look like a pill.
    Used in attendance for Raw/Sessions view switch. */
@@ -1103,7 +1106,7 @@ function pollPair(){
       box.innerHTML=`<div style='text-align:center;padding:18px 0'>
         <div style='font-size:14px;color:var(--t1)'>${t('people.tap_html',dev)}</div>
         <div class='t-mute' style='font-size:12px;margin-top:8px'>${t('people.after_connect')}</div>
-        <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('people.remaining',sec)}</div>
+        <div class=note>${t('people.remaining',sec)}</div>
       </div>
       <div class=row style='justify-content:center;margin-top:8px'>
         <button class='btn ghost sm' id=cancelB>${t('people.cancel_pair')}</button>
@@ -1170,7 +1173,7 @@ function renderSystem(){
           <input type=checkbox id=ledToggle disabled>
           <span>${t('system.led_toggle')}</span>
         </label>
-        <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.led_note')}</div>
+        <div class=note>${t('system.led_note')}</div>
       </div>
       <div class=card>
         <div class=ctitle>${t('system.presence_label')}</div>
@@ -1180,7 +1183,7 @@ function renderSystem(){
           <div class=grow></div>
           <button class=btn id=presenceSaveB>${t('common.save')}</button>
         </div>
-        <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.presence_note')}</div>
+        <div class=note>${t('system.presence_note')}</div>
       </div>
     </div>
     <div class=card>
@@ -1189,7 +1192,7 @@ function renderSystem(){
         <input class=input id=nameInput placeholder='dingdong-XXXX' maxlength=18 style='flex:1'>
         <button class=btn id=nameSaveB>${t('common.save')}</button>
       </div>
-      <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.dev_name_note')}</div>
+      <div class=note>${t('system.dev_name_note')}</div>
     </div>
     <div class=card>
       <div class=ctitle>${t('system.change_pw_label')}</div>
@@ -1229,8 +1232,8 @@ function renderSystem(){
           <button class='btn ghost' id=ntpResync title='${t('system.sync_ntp')}'>↻</button>
           <button class=btn id=ntpSaveB>${t('common.save')}</button>
         </div>
-        <div class='t-mute' id=ntpStatus style='font-size:11px;margin-top:6px'></div>
-        <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.ntp_note')}</div>
+        <div class=note id=ntpStatus></div>
+        <div class=note>${t('system.ntp_note')}</div>
       </div>
       <div class=card>
         <div class=ctitle>${t('system.backup_label')}</div>
