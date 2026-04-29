@@ -7,6 +7,7 @@
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_timer.h"
+#include "nvs.h"
 
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
@@ -53,11 +54,21 @@ static esp_timer_handle_t s_scan_restart_timer = NULL;
 // immediately disconnect. If the connect attempt fails or times out, the
 // timer eventually crosses PRESENCE_TIMEOUT_MS and OUT fires normally.
 #define PRESENCE_MAX           BOND_MAX_LIST
-#define PRESENCE_TIMEOUT_MS    300000   // 5 min total before OUT
-#define PRESENCE_PROBE_AFTER_MS 60000   // start probing at 1 min stale
-#define PRESENCE_PROBE_TIMEOUT_MS 6000  // give the probe ~6s to settle
-#define PRESENCE_PROBE_COOLDOWN_MS 60000  // gap between probes for one peer
+// 60s default but mutable at runtime via dd_ble_set_presence_timeout_s
+// (NVS-backed). The probe machinery is sized assuming the default; if you
+// turn the timeout way up, probes still fire every PROBE_COOLDOWN_MS.
+#define PRESENCE_TIMEOUT_DEFAULT_S 60
+#define PRESENCE_TIMEOUT_MIN_S     30
+#define PRESENCE_TIMEOUT_MAX_S     600
+#define PRESENCE_PROBE_AFTER_MS 20000   // start probing at 20s stale
+#define PRESENCE_PROBE_TIMEOUT_MS 3000  // per-attempt connect timeout
+#define PRESENCE_PROBE_COOLDOWN_MS 20000  // gap between probe attempts
 #define PRESENCE_TICK_MS       1000
+
+#define PRESENCE_NVS_NS    "presence"
+#define PRESENCE_NVS_KEY   "timeout_s"
+
+static int s_presence_timeout_ms = PRESENCE_TIMEOUT_DEFAULT_S * 1000;
 
 typedef struct {
     uint8_t  addr[6];
@@ -255,7 +266,7 @@ static void presence_tick_cb(void *arg)
         // PRESENCE_PROBE_AFTER_MS, with a cooldown so we don't hammer iPhone
         // every tick during the probe-then-out window.
         if (since_ms > PRESENCE_PROBE_AFTER_MS &&
-            since_ms <= PRESENCE_TIMEOUT_MS &&
+            since_ms <= s_presence_timeout_ms &&
             !s_presence[i].probing) {
             int64_t since_probe = (now - s_presence[i].last_probe_us) / 1000;
             if (s_presence[i].last_probe_us == 0 ||
@@ -269,7 +280,7 @@ static void presence_tick_cb(void *arg)
             }
         }
 
-        if (since_ms > PRESENCE_TIMEOUT_MS && !s_presence[i].probing) {
+        if (since_ms > s_presence_timeout_ms && !s_presence[i].probing) {
             s_presence[i].present = false;
             ESP_LOGI(TAG, "presence OUT %02x:%02x:%02x:%02x:%02x:%02x (no adv for %llds)",
                      s_presence[i].addr[0], s_presence[i].addr[1],
@@ -306,6 +317,40 @@ void dd_ble_presence_reset_events(void)
         }
     }
     ESP_LOGI(TAG, "presence reset: %d in-proximity peers will re-emit IN", n);
+}
+
+int dd_ble_get_presence_timeout_s(void)
+{
+    return s_presence_timeout_ms / 1000;
+}
+
+esp_err_t dd_ble_set_presence_timeout_s(int seconds)
+{
+    if (seconds < PRESENCE_TIMEOUT_MIN_S) seconds = PRESENCE_TIMEOUT_MIN_S;
+    if (seconds > PRESENCE_TIMEOUT_MAX_S) seconds = PRESENCE_TIMEOUT_MAX_S;
+    s_presence_timeout_ms = seconds * 1000;
+
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(PRESENCE_NVS_NS, NVS_READWRITE, &h);
+    if (err == ESP_OK) {
+        nvs_set_i32(h, PRESENCE_NVS_KEY, seconds);
+        err = nvs_commit(h);
+        nvs_close(h);
+    }
+    ESP_LOGI(TAG, "presence timeout = %ds", seconds);
+    return err;
+}
+
+static void load_presence_settings(void)
+{
+    nvs_handle_t h;
+    if (nvs_open(PRESENCE_NVS_NS, NVS_READONLY, &h) != ESP_OK) return;
+    int32_t v = 0;
+    if (nvs_get_i32(h, PRESENCE_NVS_KEY, &v) == ESP_OK &&
+        v >= PRESENCE_TIMEOUT_MIN_S && v <= PRESENCE_TIMEOUT_MAX_S) {
+        s_presence_timeout_ms = v * 1000;
+    }
+    nvs_close(h);
 }
 
 static void start_scanning(void)
@@ -748,6 +793,8 @@ esp_err_t dd_ble_start(void)
 {
     // NimBLE logs "GAP procedure initiated..." chatter at INFO. Quiet it.
     esp_log_level_set("NimBLE", ESP_LOG_WARN);
+
+    load_presence_settings();
 
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_BT);

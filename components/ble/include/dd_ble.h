@@ -59,6 +59,15 @@ bool      dd_ble_bond_exists(const uint8_t addr[6]);
 // instead of waiting for the next OUT→IN transition.
 void      dd_ble_presence_reset_events(void);
 
+// Presence OUT timeout — how long we go without any signal (scan adv,
+// connect-probe success, or HID auto-reconnect) before declaring a bonded
+// peer gone. NVS-backed (namespace "presence", key "timeout_s"), default
+// 60 s, clamped to [30, 600]. Tradeoff: shorter = faster OUT detection
+// when person actually leaves, but more false OUTs when iPhone goes
+// quiet (locked screen + no nearby Apple devices to wake Find My).
+int       dd_ble_get_presence_timeout_s(void);
+esp_err_t dd_ble_set_presence_timeout_s(int seconds);
+
 #ifdef __cplusplus
 }
 #endif

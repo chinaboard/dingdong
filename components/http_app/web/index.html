@@ -377,6 +377,9 @@ const I18N = {
     'system.led_label':'Status LED',
     'system.led_toggle':'Enable status LED',
     'system.led_note':'* Turning off blanks the on-board pixel completely (heap warnings, pairing window, NTP state).',
+    'system.presence_label':'Presence OUT timeout',
+    'system.presence_unit':'seconds',
+    'system.presence_note':'* How long without any signal (BLE adv, connect probe, or HID reconnect) before declaring an iPhone gone. Range 30–600. Lower = quicker OUT detection but more false OUTs when iPhone is locked.',
     'system.change_pw_label':'Change admin password',
     'system.cur_pw':'Current password', 'system.new_pw':'New password (≥8 chars)', 'system.change':'Change',
     'system.pw_required':'Current password + new password (≥8 chars) required',
@@ -512,6 +515,9 @@ const I18N = {
     'system.led_label':'状态 LED',
     'system.led_toggle':'启用状态 LED',
     'system.led_note':'* 关闭后板载像素灯完全熄灭(不会再显示堆告警、配对窗口、NTP 状态等)。',
+    'system.presence_label':'OUT 超时',
+    'system.presence_unit':'秒',
+    'system.presence_note':'* 多久没有任何信号(BLE 广播、连接探测、HID 自动回连)就判定 iPhone 离开。范围 30–600。值越小 OUT 越快,但 iPhone 锁屏期间误 OUT 几率越高。',
     'system.change_pw_label':'修改管理员密码',
     'system.cur_pw':'当前密码', 'system.new_pw':'新密码 (≥8 位)', 'system.change':'修改',
     'system.pw_required':'需要填写当前密码 + 新密码 (≥8 位)',
@@ -1061,6 +1067,15 @@ function renderSystem(){
       <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.led_note')}</div>
     </div>
     <div class=card>
+      <div class=label>${t('system.presence_label')}</div>
+      <div class=row>
+        <input class=input id=presenceTimeout type=number min=30 max=600 step=5 style='max-width:100px'>
+        <span class='t-mute' style='font-size:12px'>${t('system.presence_unit')}</span>
+        <button class=btn id=presenceSaveB>${t('common.save')}</button>
+      </div>
+      <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.presence_note')}</div>
+    </div>
+    <div class=card>
       <div class=label>${t('system.dev_name_label')}</div>
       <div class=row>
         <input class=input id=nameInput placeholder='dingdong-XXXX' maxlength=18 style='flex:1'>
@@ -1110,6 +1125,17 @@ function renderSystem(){
       if(!r.ok){cb.checked=!cb.checked;alert(t('common.failed'));}
     };
   });
+  fetch('/api/system/presence_timeout').then(r=>r.json()).then(d=>{
+    const inp=$('presenceTimeout');if(!inp)return;
+    inp.value=d.timeout_s||60;
+  });
+  $('presenceSaveB').onclick=async e=>{
+    const v=parseInt($('presenceTimeout').value,10);
+    if(!(v>=30&&v<=600)){alert('30 - 600');return;}
+    const r=await fetch('/api/system/presence_timeout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({timeout_s:v})});
+    if(r.ok){e.target.textContent='✓';setTimeout(()=>e.target.textContent=t('common.save'),1000);}
+    else alert(t('common.failed'));
+  };
   $('diagRefresh').onclick=loadDiag;
   $('ntpResync').onclick=async e=>{await fetch('/api/system/time_resync',{method:'POST'});
     e.target.textContent='✓';setTimeout(()=>e.target.textContent=t('system.sync_ntp'),1500);};

@@ -208,6 +208,8 @@ esp_err_t dd_http_start(void)
         { .uri = "/api/system/device_name",   .method = HTTP_POST, .handler = device_name_post  },
         { .uri = "/api/system/led",           .method = HTTP_GET,  .handler = led_get           },
         { .uri = "/api/system/led",           .method = HTTP_POST, .handler = led_post          },
+        { .uri = "/api/system/presence_timeout", .method = HTTP_GET,  .handler = presence_timeout_get },
+        { .uri = "/api/system/presence_timeout", .method = HTTP_POST, .handler = presence_timeout_post },
         { .uri = "/api/system/backup",        .method = HTTP_GET,  .handler = backup_get        },
         { .uri = "/api/system/restore",       .method = HTTP_POST, .handler = restore_post      },
         { .uri = "/api/system/diag",          .method = HTTP_GET,  .handler = diag_get          },

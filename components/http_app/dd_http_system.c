@@ -334,6 +334,32 @@ esp_err_t led_post(httpd_req_t *req)
     return reply_text(req, "200 OK", "ok");
 }
 
+// ---------- presence timeout ----------
+
+esp_err_t presence_timeout_get(httpd_req_t *req)
+{
+    if (require_auth(req) != ESP_OK) return ESP_OK;
+    cJSON *r = cJSON_CreateObject();
+    cJSON_AddNumberToObject(r, "timeout_s", dd_ble_get_presence_timeout_s());
+    return reply_json_status(req, "200 OK", r);
+}
+
+esp_err_t presence_timeout_post(httpd_req_t *req)
+{
+    if (require_auth(req) != ESP_OK) return ESP_OK;
+    cJSON *j = recv_json_body(req);
+    if (!j) return reply_text(req, "400 Bad Request", "bad json");
+    const cJSON *t = cJSON_GetObjectItem(j, "timeout_s");
+    if (!cJSON_IsNumber(t)) {
+        cJSON_Delete(j);
+        return reply_text(req, "400 Bad Request", "timeout_s (int) required");
+    }
+    esp_err_t err = dd_ble_set_presence_timeout_s((int)t->valuedouble);
+    cJSON_Delete(j);
+    if (err != ESP_OK) return reply_text(req, "500 Internal Server Error", "save failed");
+    return reply_text(req, "200 OK", "ok");
+}
+
 // ---------- backup / restore ----------
 //
 // Backup contains everything needed to recreate the device's logical state on
