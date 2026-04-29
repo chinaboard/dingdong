@@ -427,6 +427,7 @@ const I18N = {
     'system.led_note':'* Turning off blanks the on-board pixel completely (heap warnings, pairing window, NTP state).',
     'system.presence_label':'Presence OUT timeout',
     'system.presence_unit':'seconds',
+    'system.presence_range':'Timeout must be between 30 and 600 seconds',
     'system.presence_note':'* How long without any signal (BLE adv, connect probe, or HID reconnect) before declaring an iPhone gone. Range 30–600. Lower = quicker OUT detection but more false OUTs when iPhone is locked.',
     'system.change_pw_label':'Change admin password',
     'system.cur_pw':'Current password', 'system.new_pw':'New password (≥8 chars)', 'system.change':'Change',
@@ -585,6 +586,7 @@ const I18N = {
     'system.led_note':'* 关闭后板载像素灯完全熄灭(不会再显示堆告警、配对窗口、NTP 状态等)。',
     'system.presence_label':'OUT 超时',
     'system.presence_unit':'秒',
+    'system.presence_range':'超时值必须在 30 到 600 秒之间',
     'system.presence_note':'* 多久没有任何信号(BLE 广播、连接探测、HID 自动回连)就判定 iPhone 离开。范围 30–600。值越小 OUT 越快,但 iPhone 锁屏期间误 OUT 几率越高。',
     'system.change_pw_label':'修改管理员密码',
     'system.cur_pw':'当前密码', 'system.new_pw':'新密码 (≥8 位)', 'system.change':'修改',
@@ -745,6 +747,7 @@ function render(){
   const wizard = state.setupMode || !state.authed;
   document.body.classList.toggle('wizard', wizard);
   $('topLogoutB').style.display = wizard ? 'none' : '';
+  $('topLogoutB').title = t('system.logout');
   // Tear down auto-refresh timers when navigating away from System tab.
   if(state.view!=='system' && state.logsTimer){clearInterval(state.logsTimer);state.logsTimer=null;}
   if (wizard) {
@@ -1292,7 +1295,7 @@ function renderSystem(){
   });
   $('presenceSaveB').onclick=async e=>{
     const v=parseInt($('presenceTimeout').value,10);
-    if(!(v>=30&&v<=600)){alert('30 - 600');return;}
+    if(!(v>=30&&v<=600)){alert(t('system.presence_range'));return;}
     const r=await fetch('/api/system/presence_timeout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({timeout_s:v})});
     if(r.ok){e.target.textContent='✓';setTimeout(()=>e.target.textContent=t('common.save'),1000);}
     else alert(t('common.failed'));
