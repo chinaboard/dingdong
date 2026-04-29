@@ -133,3 +133,8 @@ esp_err_t dd_time_set_ntp_server(const char *server)
     dd_time_sntp_start();
     return err;
 }
+
+int64_t dd_time_last_sync_unix(void)
+{
+    return s_wall_at_sync_us / 1000000;
+}

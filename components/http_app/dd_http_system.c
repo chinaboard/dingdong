@@ -116,6 +116,7 @@ esp_err_t status_get(httpd_req_t *req)
     cJSON_AddBoolToObject(j, "ble_advertising", dd_ble_is_advertising());
     cJSON_AddBoolToObject(j, "pairing_active", dd_ble_pairing_active());
     cJSON_AddBoolToObject(j, "ntp_synced", dd_time_is_synced());
+    cJSON_AddNumberToObject(j, "ntp_last_sync_unix", (double)dd_time_last_sync_unix());
     cJSON_AddNumberToObject(j, "now_unix", (double)dd_time_now_unix());
     cJSON_AddNumberToObject(j, "events_count", (double)dd_storage_event_count());
     cJSON_AddNumberToObject(j, "events_bytes", (double)dd_storage_event_bytes());
@@ -368,6 +369,7 @@ esp_err_t ntp_server_get(httpd_req_t *req)
     cJSON *r = cJSON_CreateObject();
     cJSON_AddStringToObject(r, "server", dd_time_get_ntp_server());
     cJSON_AddBoolToObject  (r, "synced", dd_time_is_synced());
+    cJSON_AddNumberToObject(r, "last_sync_unix", (double)dd_time_last_sync_unix());
     return reply_json_status(req, "200 OK", r);
 }
 

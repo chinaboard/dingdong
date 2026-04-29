@@ -229,7 +229,7 @@ table tr:hover td{background:var(--surface-2)}
 .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 @media (max-width:640px){.tiles{grid-template-columns:1fr 1fr}}
 @media (max-width:380px){.tiles{grid-template-columns:1fr}}
-.tile{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px}
+.tile{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;min-height:110px}
 .tile .k{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);font-weight:500;margin-bottom:6px}
 .tile .v{font-size:16px;color:var(--t1);font-weight:600;line-height:1.25;letter-spacing:-.01em}
 .tile .v .u{font-size:11px;color:var(--t3);font-weight:400;margin-left:3px;letter-spacing:0}
@@ -385,7 +385,7 @@ const I18N = {
     'system.section_diagnostics':'Diagnostics',
     'system.section_danger':'Danger zone',
     'system.ntp_label':'NTP server',
-    'system.ntp_synced':'Time is synced.',
+    'system.ntp_synced':'Synced {0}.',
     'system.ntp_unsynced':'Not synced yet — check server reachability.',
     'system.ntp_note':'* Hostname or IP. Must respond to NTP queries on UDP/123. Common picks: pool.ntp.org · time.cloudflare.com · time.apple.com · ntp.aliyun.com',
     'system.reset_stats':'Reset boot/uptime stats',
@@ -424,6 +424,7 @@ const I18N = {
 
     'diag.firmware':'Firmware', 'diag.idf':'IDF',
     'diag.chip':'Chip', 'diag.rev':'rev', 'diag.cores':'core',
+    'diag.identity':'Identity',
     'diag.reset_reason':'Reset reason',
     'diag.boot_runtime':'Boot / runtime', 'diag.boots':'boots',
     'diag.total':'Total', 'diag.current':'Current',
@@ -535,7 +536,7 @@ const I18N = {
     'system.section_diagnostics':'诊断',
     'system.section_danger':'危险操作',
     'system.ntp_label':'NTP 服务器',
-    'system.ntp_synced':'时间已同步。',
+    'system.ntp_synced':'已同步 ({0})。',
     'system.ntp_unsynced':'尚未同步 — 检查服务器是否可达。',
     'system.ntp_note':'* 域名或 IP。需要响应 UDP/123 上的 NTP 查询。常用:pool.ntp.org · time.cloudflare.com · time.apple.com · ntp.aliyun.com',
     'system.reset_stats':'清零启动/运行统计',
@@ -574,6 +575,7 @@ const I18N = {
 
     'diag.firmware':'固件', 'diag.idf':'IDF',
     'diag.chip':'芯片', 'diag.rev':'版本', 'diag.cores':'核',
+    'diag.identity':'设备标识',
     'diag.reset_reason':'复位原因',
     'diag.boot_runtime':'启动 / 运行', 'diag.boots':'次启动',
     'diag.total':'累计', 'diag.current':'本次',
@@ -914,8 +916,8 @@ async function renderAttendance(){
         <button class='btn ghost' id=expJsonl>${t('attendance.jsonl')}</button>
       </div>
     </div>
+    <div class=section>${t('system.section_danger')}</div>
     <div class=card>
-      <div class=label style='color:var(--danger)'>${t('attendance.wipe')}</div>
       <div class='t-mute' style='font-size:12px;margin-bottom:10px'>${t('attendance.wipe_hint')}</div>
       <button class='btn danger' id=wipeB>${t('attendance.wipe')}</button>
     </div>`;
@@ -994,9 +996,7 @@ async function renderPeople(){
       <div id=pairBox></div>
     </div>
     <div class=card>
-      <div class='row between' style='margin-bottom:12px'>
-        <h2 style='margin:0'>${t('people.workers_title')} (<span id=workersCount>0</span>)</h2>
-      </div>
+      <h2 style='margin:0 0 12px'>${t('people.workers_title')} (<span id=workersCount>0</span>)</h2>
       <div id=workersList class=empty>${t('common.loading')}</div>
     </div>`;
   $('pairB').onclick=async()=>{
@@ -1148,13 +1148,11 @@ function renderSystem(){
             <option value=time.apple.com>
             <option value=time.windows.com>
           </datalist>
+          <button class='btn ghost' id=ntpResync title='${t('system.sync_ntp')}'>↻</button>
           <button class=btn id=ntpSaveB>${t('common.save')}</button>
         </div>
         <div class='t-mute' id=ntpStatus style='font-size:11px;margin-top:6px'></div>
         <div class='t-mute' style='font-size:11px;margin-top:6px'>${t('system.ntp_note')}</div>
-        <div class=row style='margin-top:10px'>
-          <button class='btn ghost sm' id=ntpResync>${t('system.sync_ntp')}</button>
-        </div>
       </div>
       <div class=card>
         <div class=label>${t('system.backup_label')}</div>
@@ -1174,7 +1172,7 @@ function renderSystem(){
       <div class=row style='margin-top:12px'>
         <button class='btn ghost' id=diagRefresh>${t('common.refresh')}</button>
         <div class=grow></div>
-        <button class='btn ghost sm' id=metricsResetB>${t('system.reset_stats')}</button>
+        <button class='btn ghost sm danger' id=metricsResetB>${t('system.reset_stats')}</button>
       </div>
     </div>
 
@@ -1211,7 +1209,9 @@ function renderSystem(){
   };
   fetch('/api/system/ntp_server').then(r=>r.json()).then(d=>{
     if($('ntpServer'))$('ntpServer').value=d.server||'';
-    if($('ntpStatus'))$('ntpStatus').textContent=d.synced?t('system.ntp_synced'):t('system.ntp_unsynced');
+    if($('ntpStatus'))$('ntpStatus').textContent=
+      d.synced ? t('system.ntp_synced', d.last_sync_unix?fmtRel(d.last_sync_unix):'?')
+               : t('system.ntp_unsynced');
   });
   $('ntpSaveB').onclick=async e=>{
     const v=$('ntpServer').value.trim();
@@ -1222,7 +1222,7 @@ function renderSystem(){
   };
   $('diagRefresh').onclick=loadDiag;
   $('ntpResync').onclick=async e=>{await fetch('/api/system/time_resync',{method:'POST'});
-    e.target.textContent='✓';setTimeout(()=>e.target.textContent=t('system.sync_ntp'),1500);};
+    e.target.textContent='✓';setTimeout(()=>e.target.textContent='↻',1500);};
   $('metricsResetB').onclick=async e=>{
     if(!confirm(t('system.reset_stats_confirm')))return;
     const r=await fetch('/api/system/metrics_reset',{method:'POST'});
@@ -1282,10 +1282,13 @@ async function loadDiag(){
       <div class=k>${t('diag.chip')}</div>
       <div class=v>${chip.model||'?'}</div>
       <div class=sub>${t('diag.rev')} ${chip.rev_major||0}.${chip.rev_minor||0} · ${chip.cores||0} ${t('diag.cores')}</div>
-      <div class='sub mono'>BT  ${chip.mac_bt||'-'}</div>
+      <div class=sub>${t('diag.reset_reason')} <span class=mono>${r.reset_reason||'-'}</span></div>
+    </div>
+    <div class=tile>
+      <div class=k>${t('diag.identity')}</div>
+      <div class='sub mono'>BT   ${chip.mac_bt||'-'}</div>
       <div class='sub mono'>WiFi ${chip.mac_wifi||'-'}</div>
       <div class='sub mono'>${chip.mdns||'-'}.local</div>
-      <div class=sub>${t('diag.reset_reason')} <span class=mono>${r.reset_reason||'-'}</span></div>
     </div>
     <div class=tile>
       <div class=k>${t('diag.boot_runtime')}</div>

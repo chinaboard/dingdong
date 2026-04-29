@@ -33,6 +33,9 @@ int64_t   dd_time_mono_to_unix(int64_t mono_us);
 const char *dd_time_get_ntp_server(void);
 esp_err_t   dd_time_set_ntp_server(const char *server);
 
+// Wall-clock unix seconds when SNTP last successfully synced. 0 if never.
+int64_t   dd_time_last_sync_unix(void);
+
 #ifdef __cplusplus
 }
 #endif
