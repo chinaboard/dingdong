@@ -657,7 +657,7 @@ const NAV=[
   {id:'people',k:'nav.people'},
   {id:'system',k:'nav.system'},
 ];
-let state={view:'overview',workers:[],workersById:{},pairedMode:false,authed:false,setupMode:false,status:null,logsTimer:null};
+let state={view:'overview',workers:[],workersById:{},pairedMode:false,authed:false,setupMode:false,status:null,logsTimer:null,pairTimer:null};
 
 function renderNav(host,active){
   host.innerHTML='';
@@ -751,8 +751,9 @@ function render(){
   document.body.classList.toggle('wizard', wizard);
   $('topLogoutB').style.display = wizard ? 'none' : '';
   $('topLogoutB').title = t('system.logout');
-  // Tear down auto-refresh timers when navigating away from System tab.
+  // Tear down auto-refresh timers when navigating away from their tab.
   if(state.view!=='system' && state.logsTimer){clearInterval(state.logsTimer);state.logsTimer=null;}
+  if(state.view!=='people' && state.pairTimer){clearTimeout(state.pairTimer);state.pairTimer=null;}
   if (wizard) {
     // No nav in wizard mode — clear stale tab content if rendered earlier.
     $('sidebar').innerHTML = '';
@@ -1082,12 +1083,18 @@ async function renderPeople(){
 function pollPair(){
   const box=$('pairBox');
   let confirming=false;
+  // Track the pending setTimeout so finish() (or a tab-switch cleanup in
+  // render()) can cancel the recursive tick chain — otherwise stale ticks
+  // keep firing against a dead DOM after pairing closes.
+  if(state.pairTimer){clearTimeout(state.pairTimer);state.pairTimer=null;}
   const finish=()=>{
+    if(state.pairTimer){clearTimeout(state.pairTimer);state.pairTimer=null;}
     if($('pairB')){$('pairB').disabled=false;}
     loadWorkers();
   };
   const tick=async()=>{
-    if(confirming){setTimeout(tick,500);return;}
+    state.pairTimer=null;
+    if(confirming){state.pairTimer=setTimeout(tick,500);return;}
     const s=await fetch('/api/pairing/status').then(r=>r.json()).catch(()=>({active:false}));
     if(!s.active){box.innerHTML=`<div class="t-mute" style="font-size:12px;margin-top:8px">${t('people.window_closed')}</div>`;finish();return;}
     const sec=Math.ceil(s.remaining_ms/1000);
@@ -1113,7 +1120,7 @@ function pollPair(){
       </div>`;
       $('cancelB').onclick=async()=>{await fetch('/api/pairing/cancel',{method:'POST'});box.innerHTML='';finish();};
     }
-    setTimeout(tick,1000);
+    state.pairTimer=setTimeout(tick,1000);
   };
   tick();
 }
@@ -1281,7 +1288,7 @@ function renderSystem(){
     const r=await fetch('/api/system/logs/clear',{method:'POST'});
     if(r.ok)loadLogs(); else alert(t('common.failed'));
   };
-  fetch('/api/system/device_name').then(r=>r.json()).then(d=>{$('nameInput').value=d.name||'';});
+  fetch('/api/system/device_name').then(r=>r.json()).then(d=>{$('nameInput').value=d.name||'';}).catch(()=>{});
   fetch('/api/system/led').then(r=>r.json()).then(d=>{
     const cb=$('ledToggle');if(!cb)return;
     cb.checked=!!d.enabled; cb.disabled=false;
@@ -1291,11 +1298,11 @@ function renderSystem(){
       cb.disabled=false;
       if(!r.ok){cb.checked=!cb.checked;alert(t('common.failed'));}
     };
-  });
+  }).catch(()=>{});
   fetch('/api/system/presence_timeout').then(r=>r.json()).then(d=>{
     const inp=$('presenceTimeout');if(!inp)return;
     inp.value=d.timeout_s||60;
-  });
+  }).catch(()=>{});
   $('presenceSaveB').onclick=async e=>{
     const v=parseInt($('presenceTimeout').value,10);
     if(!(v>=30&&v<=600)){alert(t('system.presence_range'));return;}
@@ -1308,7 +1315,7 @@ function renderSystem(){
     if($('ntpStatus'))$('ntpStatus').textContent=
       d.synced ? t('system.ntp_synced', d.last_sync_unix?fmtRel(d.last_sync_unix):'?')
                : t('system.ntp_unsynced');
-  });
+  }).catch(()=>{});
   $('ntpSaveB').onclick=async e=>{
     const v=$('ntpServer').value.trim();
     if(!v){alert(t('common.failed'));return;}
