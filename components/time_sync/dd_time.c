@@ -91,12 +91,11 @@ esp_err_t dd_time_sntp_start(void)
         esp_netif_sntp_deinit();
         s_sntp_inited = false;
     }
-    char server[DD_NTP_SERVER_MAX];
-    LOCK();
-    strncpy(server, s_ntp_server, sizeof(server) - 1);
-    server[sizeof(server) - 1] = '\0';
-    UNLOCK();
-    esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG(server);
+    // ESP_NETIF_SNTP_DEFAULT_CONFIG stores the server pointer (not a copy)
+    // and SNTP keeps using it across re-resolutions. Pass the static
+    // s_ntp_server directly — it lives forever; mutations go through
+    // dd_time_set_ntp_server which deinits before mutating then reinits.
+    esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG(s_ntp_server);
     cfg.start = true;
     cfg.sync_cb = on_sync;
     cfg.smooth_sync = false;
@@ -104,7 +103,7 @@ esp_err_t dd_time_sntp_start(void)
     esp_err_t err = esp_netif_sntp_init(&cfg);
     if (err == ESP_OK) {
         s_sntp_inited = true;
-        ESP_LOGI(TAG, "SNTP started, server=%s", server);
+        ESP_LOGI(TAG, "SNTP started, server=%s", s_ntp_server);
     } else {
         ESP_LOGE(TAG, "sntp_init=%s", esp_err_to_name(err));
     }
