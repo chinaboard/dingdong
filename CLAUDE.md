@@ -100,7 +100,7 @@ The attendance signal is **not** driven by HID connect/disconnect events — tha
 
 1. **Initial bond**: user opens pairing window → iPhone connects to the HID peripheral → SC pairing exchanges IRK → bond saved in NVS. (Pairing method is **Numeric Comparison** — both sides display the same 6-digit number; user verifies on iPhone + Web UI.)
 2. **Steady state**: device runs continuous extended-discovery scan (50 ms interval / 30 ms window, passive). NimBLE auto-resolves incoming RPAs against the resolving list (which is populated from NVS bonds at boot). When the resolved identity address matches a bond, we update `last_seen_us` for that peer.
-3. **Tick** (1 Hz): for each bonded peer, if `last_seen_us` is older than 15 s → fire OUT. If we have a sighting but haven't recorded IN yet (because NTP wasn't synced) → fire IN with the now-valid timestamp.
+3. **Tick** (1 Hz): for each bonded peer, if `last_seen_us` is older than `PRESENCE_TIMEOUT_MS` (120 s) → fire OUT. At `PRESENCE_PROBE_AFTER_MS` (60 s) of staleness, fire an active connect-probe first to distinguish "iPhone is locked and quiet" from "iPhone actually left". If we have a sighting but haven't recorded IN yet (because NTP wasn't synced) → fire IN with the now-valid timestamp.
 4. **HID connection events** (CONNECT/DISCONNECT) are kept in the GAP callback **only** to push security-initiate during the pairing window — they no longer drive IN/OUT. iPhone may briefly auto-reconnect to the HID service while a bond is active; that's irrelevant to attendance.
 
 This is why iPhone reaction time is ≈1 second on enter and ≤15 seconds on leave, regardless of whether iOS feels like reconnecting.
@@ -115,7 +115,7 @@ Each `components/<name>/` is an isolated IDF component with `include/dd_<name>.h
 - `ble` — NimBLE host. Roles: **Peripheral** (HID adv on instance 0, legacy_pdu for iPhone backward-compat), **Observer** (continuous scan for the presence machine).
   - **Pairing**: SC + bonding + MITM, IO cap = `KEYBOARD_DISPLAY` → with iOS this gives **Numeric Comparison**. The 6-digit value is captured in `BLE_GAP_EVENT_PASSKEY_ACTION` and exposed via `dd_ble_pairing_numcmp()`; UI polls it via `/api/pairing/status`. On user click, `/api/pairing/confirm` calls `dd_ble_pairing_confirm(true)`. Pairing window required to allow new bonds; outside the window REPEAT_PAIRING is `IGNORE`d (so revoked iPhones with stale LTKs can't silently re-bond).
   - **Bond revoke**: `dd_ble_bond_revoke()` finds the bond by exact address bytes (sidesteps NimBLE's strict address-type matching), terminates any live connection from the same peer, and deletes via `ble_store_util_delete_peer` (avoids `ble_gap_unpair`'s EBUSY trap).
-  - **Presence machine**: per-bond slot table with `last_seen_us`, `present`, `ack_event`. `dd_ble_presence_reset_events()` (called by `events_wipe`) clears `ack_event` so the next tick re-emits IN for everyone in proximity.
+  - **Presence machine**: per-bond slot table with `last_seen_us`, `present`, `ack_event`, `probing`. `dd_ble_presence_reset_events()` (called by `events_wipe`) clears `ack_event` so the next tick re-emits IN for everyone in proximity. iOS goes very sparse on BLE adv when locked + idle (Find My can throttle to under one packet per 30 s), so the timeout is set high (`PRESENCE_TIMEOUT_MS = 120 s`) and the tick fires an active connect-probe at `PRESENCE_PROBE_AFTER_MS = 60 s` of staleness — `ble_gap_connect` to the peer's identity address; iOS accepts on a known bond, we refresh `last_seen` and immediately disconnect. Probe failure is silent; the timer eventually crosses 120 s and OUT fires normally. Requires `BT_NIMBLE_ROLE_CENTRAL=y` (~20 KB image cost).
   - **Note on adv instances**: instance 0 is HID (legacy PDU). The ESP32-C6 BLE 5 controller can only sustain **one legacy advertising set at a time**, so don't add a second legacy adv instance — it'll either fail to start or push HID off the air. Extended PDU is fine for additional sets if needed.
 - `time_sync` — `esp_sntp` + monotonic↔wall translation. TZ is set once from the build-time `DD_TZ` macro (default `"CST-8"`); no runtime setter. `dd_time_mono_to_unix(mono_us)` is how callers backfill timestamps for events captured before NTP sync.
 - `storage` — LittleFS mount at `/storage`, single append-only `events.jsonl`. All file mutation is mutex-serialized. `dd_storage_event_count()` is cached (updated on append/rotate); don't replace it with a per-call scan. Rotation is two-tier: daily time-based (primary) and 512 KB hard cap (fallback). `dd_storage_event_delete_by_worker(id)` rewrites the file filtering out events for that worker (used by hard-delete worker flow).
@@ -143,7 +143,7 @@ Image targets ≈1.37 MB / 91% of the 1.5 MB OTA slot. Key sdkconfig knobs that 
 - `LWIP_IPV6=n` (we don't use it on the local network)
 - `MBEDTLS_TLS_CLIENT=n` / `MBEDTLS_TLS_SERVER=n` / `ESP_HTTP_CLIENT_ENABLE_HTTPS=n` — no HTTPS anywhere
 - `MBEDTLS_SHA1_C=n` / `MBEDTLS_SHA384_C=n` / `MBEDTLS_SHA512_C=n` — only PBKDF2-SHA256 needed
-- `BT_NIMBLE_ROLE_CENTRAL=n` — we never initiate connections (Observer is enough for our scanning)
+- `BT_NIMBLE_ROLE_CENTRAL=y` — needed for the presence connect-probe (we briefly connect to bonded peers as Central to distinguish "locked iPhone" from "left the room")
 
 ## Conventions worth preserving
 

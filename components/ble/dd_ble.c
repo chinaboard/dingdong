@@ -37,20 +37,35 @@ static uint8_t  s_own_addr_type;
 static bool     s_advertising = false;
 static esp_timer_handle_t s_adv_restart_timer = NULL;
 
-// ---------- presence (scan-based) ----------
+// ---------- presence (scan-based + connect-probe fallback) ----------
 // Continuous scan resolves iPhone RPAs to identity via IRK exchanged during
 // bonding. NimBLE's host privacy stack keeps the resolving list current.
 // On each matching adv we update last_seen_us; a 1Hz tick fires OUT after
 // PRESENCE_TIMEOUT_MS without sightings.
+//
+// iPhone advertising goes very sparse when the screen is locked + no
+// nearby Apple devices to keep Find My active — we can easily go 60s+
+// without a single visible packet. To avoid false OUTs, the tick fires an
+// active connect-probe at PRESENCE_PROBE_AFTER_MS: we ble_gap_connect to
+// the peer's identity address, and if iOS accepts (which it will if the
+// bond is still resolvable on its side) we refresh last_seen and
+// immediately disconnect. If the connect attempt fails or times out, the
+// timer eventually crosses PRESENCE_TIMEOUT_MS and OUT fires normally.
 #define PRESENCE_MAX           BOND_MAX_LIST
-#define PRESENCE_TIMEOUT_MS    15000
+#define PRESENCE_TIMEOUT_MS    120000   // 2 min total before OUT
+#define PRESENCE_PROBE_AFTER_MS 60000   // start probing at 1 min stale
+#define PRESENCE_PROBE_TIMEOUT_MS 6000  // give the probe ~6s to settle
+#define PRESENCE_PROBE_COOLDOWN_MS 30000  // gap between probes for one peer
 #define PRESENCE_TICK_MS       1000
 
 typedef struct {
     uint8_t  addr[6];
     int64_t  last_seen_us;
-    bool     present;     // currently in proximity (last_seen recent)
-    bool     ack_event;   // IN event has been recorded for this proximity window
+    int64_t  last_probe_us;     // when last probe attempt started
+    bool     present;           // currently in proximity (last_seen recent)
+    bool     ack_event;         // IN event has been recorded for this proximity window
+    bool     probing;           // a connect-probe is in flight
+    uint16_t probe_handle;      // conn handle for in-flight probe (0xFFFF if none)
     bool     used;
 } presence_slot_t;
 
@@ -97,6 +112,9 @@ static void presence_seen_addr(const uint8_t addr[6])
         memcpy(s_presence[slot_idx].addr, addr, 6);
         s_presence[slot_idx].present = false;
         s_presence[slot_idx].ack_event = false;
+        s_presence[slot_idx].probing = false;
+        s_presence[slot_idx].probe_handle = 0xFFFF;
+        s_presence[slot_idx].last_probe_us = 0;
     }
 
     s_presence[slot_idx].last_seen_us = esp_timer_get_time();
@@ -113,6 +131,84 @@ static void presence_seen_addr(const uint8_t addr[6])
         }
         dd_event_record(DD_EV_IN, DD_SRC_BLE_AUTO, addr, 0, NULL);
         s_presence[slot_idx].ack_event = true;
+    }
+}
+
+// ---------- presence: active connect-probe ----------
+//
+// When a bonded peer goes silent (iPhone locked, Find My quiet), we try
+// to connect to it ourselves before declaring OUT. iOS accepts the
+// connection on a known bond without user prompting, so success/fail is
+// a clean "is this device still around" signal. We disconnect immediately
+// — we never had any reason to stay connected.
+
+static int probe_event_cb(struct ble_gap_event *event, void *arg)
+{
+    intptr_t slot_idx = (intptr_t)arg;
+    if (slot_idx < 0 || slot_idx >= PRESENCE_MAX) return 0;
+    presence_slot_t *s = &s_presence[slot_idx];
+
+    switch (event->type) {
+    case BLE_GAP_EVENT_CONNECT:
+        if (event->connect.status == 0) {
+            ESP_LOGI(TAG, "probe OK slot=%d → refresh, drop conn", (int)slot_idx);
+            s->probe_handle = event->connect.conn_handle;
+            s->last_seen_us = esp_timer_get_time();  // proof of presence
+            // Don't fire IN/OUT machinery — we already had `present=true`,
+            // we're just keeping it that way. Disconnect immediately.
+            ble_gap_terminate(event->connect.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+        } else {
+            ESP_LOGI(TAG, "probe FAIL slot=%d status=%d", (int)slot_idx, event->connect.status);
+            s->probing = false;
+        }
+        return 0;
+
+    case BLE_GAP_EVENT_DISCONNECT:
+        if (s->probe_handle == event->disconnect.conn.conn_handle) {
+            s->probe_handle = 0xFFFF;
+            s->probing = false;
+        }
+        return 0;
+
+    default:
+        return 0;
+    }
+}
+
+static void presence_probe_start(int slot_idx)
+{
+    presence_slot_t *s = &s_presence[slot_idx];
+    if (s->probing) return;
+    if (dd_ble_pairing_active()) return;  // don't fight the pairing flow
+
+    ble_addr_t peer = { .type = BLE_OWN_ADDR_PUBLIC };
+    memcpy(peer.val, s->addr, 6);
+
+    // Bonds are stored with type from peer_id_addr — try public first; if
+    // it was actually a random-static, NimBLE will surface that via the
+    // bond store lookup during connect. For our use case (iPhone identity
+    // address) public is correct.
+    ble_addr_t peers[BOND_MAX_LIST];
+    int n = 0;
+    if (ble_store_util_bonded_peers(peers, &n, BOND_MAX_LIST) == 0) {
+        for (int i = 0; i < n; i++) {
+            if (memcmp(peers[i].val, s->addr, 6) == 0) {
+                peer = peers[i];
+                break;
+            }
+        }
+    }
+
+    s->probing = true;
+    s->probe_handle = 0xFFFF;
+    s->last_probe_us = esp_timer_get_time();
+
+    int rc = ble_gap_connect(s_own_addr_type, &peer,
+                             PRESENCE_PROBE_TIMEOUT_MS, NULL,
+                             probe_event_cb, (void *)(intptr_t)slot_idx);
+    if (rc != 0) {
+        ESP_LOGI(TAG, "probe slot=%d ble_gap_connect rc=%d", slot_idx, rc);
+        s->probing = false;
     }
 }
 
@@ -134,6 +230,25 @@ static void presence_tick_cb(void *arg)
         }
         if (!s_presence[i].present) continue;
         int64_t since_ms = (now - s_presence[i].last_seen_us) / 1000;
+
+        // Active probe before falling off the cliff. Fire when stale crosses
+        // PRESENCE_PROBE_AFTER_MS, with a cooldown so we don't hammer iPhone
+        // every tick during the probe-then-out window.
+        if (since_ms > PRESENCE_PROBE_AFTER_MS &&
+            since_ms <= PRESENCE_TIMEOUT_MS &&
+            !s_presence[i].probing) {
+            int64_t since_probe = (now - s_presence[i].last_probe_us) / 1000;
+            if (s_presence[i].last_probe_us == 0 ||
+                since_probe >= PRESENCE_PROBE_COOLDOWN_MS) {
+                ESP_LOGI(TAG, "presence stale %llds → probing %02x:%02x:%02x:%02x:%02x:%02x",
+                         (long long)(since_ms / 1000),
+                         s_presence[i].addr[0], s_presence[i].addr[1],
+                         s_presence[i].addr[2], s_presence[i].addr[3],
+                         s_presence[i].addr[4], s_presence[i].addr[5]);
+                presence_probe_start(i);
+            }
+        }
+
         if (since_ms > PRESENCE_TIMEOUT_MS) {
             s_presence[i].present = false;
             ESP_LOGI(TAG, "presence OUT %02x:%02x:%02x:%02x:%02x:%02x (no adv for %llds)",
