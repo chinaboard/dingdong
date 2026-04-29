@@ -30,9 +30,38 @@
 #include "dd_wifi.h"
 #include "dd_worker.h"
 
+#include "driver/temperature_sensor.h"
+
 #include "http_internal.h"
 
 static const char *TAG = "http.sys";
+
+// ---------- chip temperature ----------
+//
+// ESP32-C6 on-die temperature sensor. Reports junction (silicon) temperature,
+// not ambient — typically 5-15°C above room when idle, +20-30°C under WiFi/BLE
+// load. Useful for "is the chip cooking" but NOT for room temperature.
+// ±2-5°C accuracy via factory eFuse calibration.
+//
+// Lazy-init on first call: esp_http_server runs handlers on a single task by
+// default, so no race protection needed. Returns 0.0 on install failure.
+
+static temperature_sensor_handle_t s_tsens = NULL;
+
+static float chip_temp_c(void)
+{
+    if (!s_tsens) {
+        temperature_sensor_config_t cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
+        if (temperature_sensor_install(&cfg, &s_tsens) != ESP_OK ||
+            temperature_sensor_enable(s_tsens) != ESP_OK) {
+            ESP_LOGW(TAG, "tsens install/enable failed");
+            return 0.0f;
+        }
+    }
+    float t = 0.0f;
+    temperature_sensor_get_celsius(s_tsens, &t);
+    return t;
+}
 
 // ---------- public health & metrics ----------
 
@@ -125,6 +154,7 @@ esp_err_t status_get(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "workers_count", (double)dd_worker_count());
     cJSON_AddNumberToObject(j, "uptime_s", esp_timer_get_time() / 1000000);
     cJSON_AddNumberToObject(j, "heap_free", (double)esp_get_free_heap_size());
+    cJSON_AddNumberToObject(j, "chip_temp_c", chip_temp_c());
 
     // mDNS hostname so the UI (and the setup-saved screen) can show users
     // a stable URL for after-reboot access. Always BT-MAC-derived; doesn't
@@ -735,6 +765,7 @@ esp_err_t diag_get(httpd_req_t *req)
         snprintf(host, sizeof(host), "dingdong-%02x%02x", mac[4], mac[5]);
         cJSON_AddStringToObject(chip, "mdns", host);
     }
+    cJSON_AddNumberToObject(chip, "temp_c", chip_temp_c());
     cJSON_AddItemToObject(j, "chip", chip);
 
     cJSON *heap = cJSON_CreateObject();

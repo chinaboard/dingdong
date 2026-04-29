@@ -469,6 +469,7 @@ const I18N = {
 
     'diag.firmware':'Firmware', 'diag.idf':'IDF',
     'diag.chip':'Chip', 'diag.rev':'rev', 'diag.cores':'core',
+    'diag.temp':'Die temp',
     'diag.identity':'Identity',
     'diag.reset_reason':'Reset reason',
     'diag.boot_runtime':'Boot / runtime', 'diag.boots':'boots',
@@ -642,6 +643,7 @@ const I18N = {
 
     'diag.firmware':'固件', 'diag.idf':'IDF',
     'diag.chip':'芯片', 'diag.rev':'版本', 'diag.cores':'核',
+    'diag.temp':'裸片温度',
     'diag.identity':'设备标识',
     'diag.reset_reason':'复位原因',
     'diag.boot_runtime':'启动 / 运行', 'diag.boots':'次启动',
@@ -1478,6 +1480,7 @@ async function loadDiag(){
       <div class=v>${chip.model||'?'}</div>
       <div class=sub>${t('diag.rev')} ${chip.rev_major||0}.${chip.rev_minor||0} · ${chip.cores||0} ${t('diag.cores')}</div>
       <div class=sub>${t('diag.reset_reason')} <span class=mono>${r.reset_reason||'-'}</span></div>
+      <div class=sub>${t('diag.temp')} <span class='mono ${chip.temp_c>85?"t-neg":(chip.temp_c>70?"":"")}'>${chip.temp_c?chip.temp_c.toFixed(1):'?'} °C</span></div>
     </div>
     <div class=tile>
       <div class=k>${t('diag.identity')}</div>

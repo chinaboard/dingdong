@@ -6,6 +6,7 @@ idf_component_register(
     INCLUDE_DIRS "include"
     REQUIRES esp_http_server esp_timer esp_wifi esp_system log
              config wifi_mgr session ble events storage time_sync workers led log_buf ota_pull
+             esp_driver_tsens
     PRIV_REQUIRES cjson esp_app_format app_update
 )
 
