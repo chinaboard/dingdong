@@ -369,3 +369,78 @@ esp_err_t dd_storage_event_delete_by_worker(unsigned worker_id)
              worker_id, (unsigned)dropped, (unsigned)kept);
     return ESP_OK;
 }
+
+esp_err_t dd_storage_event_delete_one(int64_t ts, int64_t mono_us)
+{
+    char ts_needle[40], mono_needle[40];
+    int ts_len   = snprintf(ts_needle,   sizeof(ts_needle),   "\"ts\":%lld",      (long long)ts);
+    int mono_len = snprintf(mono_needle, sizeof(mono_needle), "\"mono_us\":%lld", (long long)mono_us);
+    if (ts_len <= 0 || mono_len <= 0) return ESP_FAIL;
+
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+
+    FILE *in = fopen(DD_STORAGE_EVENTS, "r");
+    if (!in) { xSemaphoreGive(s_lock); return ESP_OK; }
+
+    FILE *out = fopen(DD_STORAGE_EVENTS ".tmp", "w");
+    if (!out) {
+        fclose(in);
+        xSemaphoreGive(s_lock);
+        return ESP_FAIL;
+    }
+
+    char buf[LINE_BUF_MAX];
+    size_t kept = 0, dropped = 0;
+    bool ok = true;
+    while (fgets(buf, sizeof(buf), in)) {
+        // Match needs both ts AND mono_us to hit (cJSON serializes the
+        // values as bare integers, so the substring is unambiguous when
+        // bounded by , or }).
+        bool drop = false;
+        const char *m_ts   = strstr(buf, ts_needle);
+        const char *m_mono = strstr(buf, mono_needle);
+        if (m_ts && m_mono) {
+            char a_ts   = m_ts[ts_len];
+            char a_mono = m_mono[mono_len];
+            if ((a_ts == ',' || a_ts == '}') &&
+                (a_mono == ',' || a_mono == '}')) {
+                drop = true;
+            }
+        }
+        if (drop) {
+            dropped++;
+        } else {
+            if (fputs(buf, out) == EOF) { ok = false; break; }
+            kept++;
+        }
+    }
+    fclose(in);
+    if (fclose(out) != 0) ok = false;
+
+    if (!ok) {
+        unlink(DD_STORAGE_EVENTS ".tmp");
+        xSemaphoreGive(s_lock);
+        return ESP_FAIL;
+    }
+    if (dropped == 0) {
+        unlink(DD_STORAGE_EVENTS ".tmp");
+        xSemaphoreGive(s_lock);
+        return ESP_OK;
+    }
+    if (kept == 0) {
+        unlink(DD_STORAGE_EVENTS ".tmp");
+        unlink(DD_STORAGE_EVENTS);
+        s_event_count = 0;
+    } else {
+        if (rename(DD_STORAGE_EVENTS ".tmp", DD_STORAGE_EVENTS) != 0) {
+            unlink(DD_STORAGE_EVENTS ".tmp");
+            xSemaphoreGive(s_lock);
+            return ESP_FAIL;
+        }
+        s_event_count = kept;
+    }
+    xSemaphoreGive(s_lock);
+    ESP_LOGW(TAG, "delete one ts=%lld mono=%lld: dropped %u kept %u",
+             (long long)ts, (long long)mono_us, (unsigned)dropped, (unsigned)kept);
+    return ESP_OK;
+}

@@ -573,6 +573,25 @@ esp_err_t events_wipe_post(httpd_req_t *req)
     return reply_text(req, "200 OK", "wiped");
 }
 
+esp_err_t events_delete_post(httpd_req_t *req)
+{
+    if (require_auth(req) != ESP_OK) return ESP_OK;
+    cJSON *j = recv_json_body(req);
+    if (!j) return reply_text(req, "400 Bad Request", "bad json");
+    const cJSON *ts_j   = cJSON_GetObjectItem(j, "ts");
+    const cJSON *mono_j = cJSON_GetObjectItem(j, "mono_us");
+    if (!cJSON_IsNumber(ts_j) || !cJSON_IsNumber(mono_j)) {
+        cJSON_Delete(j);
+        return reply_text(req, "400 Bad Request", "ts and mono_us required");
+    }
+    int64_t ts   = (int64_t)ts_j->valuedouble;
+    int64_t mono = (int64_t)mono_j->valuedouble;
+    cJSON_Delete(j);
+    esp_err_t err = dd_storage_event_delete_one(ts, mono);
+    if (err != ESP_OK) return reply_text(req, "500 Internal Server Error", "delete failed");
+    return reply_text(req, "200 OK", "ok");
+}
+
 // ---------- today's summary ----------
 //
 // Per-worker today (since local 00:00) total in-time and segments. Streams a

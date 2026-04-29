@@ -223,6 +223,7 @@ esp_err_t dd_http_start(void)
         { .uri = "/api/events/paired",        .method = HTTP_GET,  .handler = events_paired_get    },
         { .uri = "/api/events/export",        .method = HTTP_GET,  .handler = events_export_get    },
         { .uri = "/api/events/wipe",          .method = HTTP_POST, .handler = events_wipe_post     },
+        { .uri = "/api/events/delete",        .method = HTTP_POST, .handler = events_delete_post   },
         { .uri = "/api/workers",              .method = HTTP_GET,  .handler = workers_get          },
         { .uri = "/api/workers/update",       .method = HTTP_POST, .handler = workers_update_post  },
         { .uri = "/api/workers/delete",       .method = HTTP_POST, .handler = workers_delete_post  },

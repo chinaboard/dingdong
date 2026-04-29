@@ -48,6 +48,13 @@ esp_err_t dd_storage_event_wipe(void);
 // deleting a worker so historical attribution doesn't leak.
 esp_err_t dd_storage_event_delete_by_worker(unsigned worker_id);
 
+// Delete a single event identified by its (ts, mono_us) tuple. The pair is
+// unique within the file: ts = wall-clock unix seconds, mono_us = device
+// monotonic time at recording, both written verbatim by dd_event_record.
+// No-op if no row matches. Caller must already know the values from a
+// prior /api/events fetch.
+esp_err_t dd_storage_event_delete_one(int64_t ts, int64_t mono_us);
+
 // LittleFS partition info. Either pointer may be NULL.
 esp_err_t dd_storage_fs_info(size_t *total, size_t *used);
 

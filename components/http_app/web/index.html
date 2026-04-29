@@ -343,6 +343,8 @@ const I18N = {
     'attendance.col_start':'Start', 'attendance.col_end':'End', 'attendance.col_duration':'Duration',
     'attendance.no_events':'No events — IN fires when an iPhone enters range',
     'attendance.col_note':'Note',
+    'attendance.delete_one':'Delete this event',
+    'attendance.delete_one_confirm':'Delete this single event?',
 
     'people.title':'People / devices',
     'people.desc':'Each worker is one iPhone. BLE pairing creates the entry; "Delete" removes the worker, its bond, and its history.',
@@ -481,6 +483,8 @@ const I18N = {
     'attendance.col_start':'开始', 'attendance.col_end':'结束', 'attendance.col_duration':'时长',
     'attendance.no_events':'暂无事件 — iPhone 进入识别范围时会自动生成 IN',
     'attendance.col_note':'备注',
+    'attendance.delete_one':'删除该条',
+    'attendance.delete_one_confirm':'删除这一条事件?',
 
     'people.title':'人员 / 设备',
     'people.desc':'每个员工对应一部 iPhone。BLE 配对后会自动创建条目;"删除"会同时移除员工、配对绑定与全部历史记录。',
@@ -931,14 +935,20 @@ async function loadEvents(){
   }else{
     const evs=(r.events||[]).slice().reverse();
     if(evs.length===0){$('eventsList').innerHTML=`<div class=empty>${t('attendance.no_events')}</div>`;return;}
-    $('eventsList').innerHTML=`<table><thead><tr><th>${t('overview.col_time')}</th><th>${t('overview.col_type')}</th><th>${t('overview.col_worker')}</th><th>${t('overview.col_source')}</th><th>${t('attendance.col_note')}</th></tr></thead>
+    $('eventsList').innerHTML=`<table><thead><tr><th>${t('overview.col_time')}</th><th>${t('overview.col_type')}</th><th>${t('overview.col_worker')}</th><th>${t('overview.col_source')}</th><th>${t('attendance.col_note')}</th><th></th></tr></thead>
       <tbody>${evs.map(e=>`<tr>
         <td class=mono title='${fmtTs(e.ts)}'>${fmtRel(e.ts)}</td>
         <td><span class='evtype ${e.type}'>${e.type}</span></td>
         <td>${workerLabel(e)}</td>
         <td class='mono t-mute'>${e.src}</td>
         <td class='mono t-mute'>${e.note?escAttr(e.note):''}</td>
+        <td><button class='btn ghost sm evDel' data-ts='${e.ts||0}' data-mono='${e.mono_us||0}' title='${t('attendance.delete_one')}'>×</button></td>
       </tr>`).join('')}</tbody></table>`;
+    document.querySelectorAll('.evDel').forEach(b=>b.onclick=async()=>{
+      if(!confirm(t('attendance.delete_one_confirm')))return;
+      const r=await fetch('/api/events/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ts:+b.dataset.ts,mono_us:+b.dataset.mono})});
+      if(r.ok)loadEvents(); else alert(t('common.failed'));
+    });
   }
 }
 

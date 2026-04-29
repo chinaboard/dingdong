@@ -58,6 +58,7 @@ esp_err_t auth_change_password_post(httpd_req_t *req);
 esp_err_t events_get(httpd_req_t *req);
 esp_err_t events_post(httpd_req_t *req);
 esp_err_t events_wipe_post(httpd_req_t *req);
+esp_err_t events_delete_post(httpd_req_t *req);
 esp_err_t events_export_get(httpd_req_t *req);
 esp_err_t events_paired_get(httpd_req_t *req);
 esp_err_t today_get(httpd_req_t *req);
