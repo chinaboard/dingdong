@@ -184,10 +184,15 @@ static int probe_event_cb(struct ble_gap_event *event, void *arg)
         if (event->connect.status == 0) {
             ESP_LOGI(TAG, "probe OK slot=%d → refresh, drop conn", (int)slot_idx);
             s->probe_handle = event->connect.conn_handle;
-            s->last_seen_us = esp_timer_get_time();  // proof of presence
-            // Don't fire IN/OUT machinery — we already had `present=true`,
-            // we're just keeping it that way. Disconnect immediately;
-            // scanner restart deferred until DISCONNECT below.
+            // Successful probe is the strongest "still here" signal we have.
+            // Route through presence_seen_addr so present=true is set + IN
+            // event fires when we were previously OUT (catch-up path in
+            // presence_tick_cb). Just touching last_seen_us isn't enough —
+            // it'd leave present=false and the OUT-state re-probe would
+            // keep poking forever instead of recognising the peer is back.
+            presence_seen_addr(s->addr);
+            // Disconnect immediately; scanner restart deferred until
+            // DISCONNECT below.
             ble_gap_terminate(event->connect.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
         } else {
             ESP_LOGI(TAG, "probe FAIL slot=%d status=%d", (int)slot_idx, event->connect.status);
@@ -720,16 +725,13 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
                 // iOS auto-reconnects to known HID peripherals roughly
                 // every few minutes when the screen is off. That CONNECT
                 // is a stronger "still here" signal than scanner adv —
-                // refresh last_seen for the matching presence slot so the
-                // OUT timer doesn't fire on a phone that's actively
-                // talking to us.
-                for (int i = 0; i < PRESENCE_MAX; i++) {
-                    if (s_presence[i].used &&
-                        memcmp(s_presence[i].addr, desc.peer_id_addr.val, 6) == 0) {
-                        s_presence[i].last_seen_us = esp_timer_get_time();
-                        break;
-                    }
-                }
+                // route it through presence_seen_addr so:
+                //  • IN-state slots get last_seen refreshed (no spurious OUT)
+                //  • OUT-state slots flip back to present=true and fire IN
+                //    next tick (catch-up code in presence_tick_cb)
+                // We deliberately use peer_id_addr (the resolved identity),
+                // not the on-air RPA, so it matches the bond store entries.
+                presence_seen_addr(desc.peer_id_addr.val);
             }
         } else {
             // failed; restart adv (deferred — controller still busy with the
