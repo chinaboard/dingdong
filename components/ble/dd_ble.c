@@ -651,11 +651,18 @@ static int count_bonds(void)
 // would never detect the phone at all. Pre-allocating means the tick will
 // see slots in present=false state and run the OUT-state re-probe, which
 // reliably wakes locked iPhones via active connect.
+//
+// Boot-resume: each slot consults the events log for that peer's most recent
+// event. If it was IN (no OUT since), we initialize the slot as already-
+// present + ack_event=true, so the next detection won't fire a duplicate IN.
+// If the peer is genuinely gone, the OUT timer starts from now and fires
+// after PRESENCE_TIMEOUT_MS of failed probes (correct OUT recorded).
 static void presence_preallocate_bonded(void)
 {
     ble_addr_t peers[BOND_MAX_LIST];
     int n = 0;
     if (ble_store_util_bonded_peers(peers, &n, BOND_MAX_LIST) != 0) return;
+    int64_t now_us = esp_timer_get_time();
     for (int i = 0; i < n && i < PRESENCE_MAX; i++) {
         // Skip if a slot already holds this addr (re-init or duplicate bond).
         bool already = false;
@@ -677,19 +684,31 @@ static void presence_preallocate_bonded(void)
             ESP_LOGW(TAG, "presence slots full while pre-allocating bonds");
             break;
         }
+
+        // Look up the most recent event for this peer to decide initial state.
+        dd_event_type_t last_type;
+        bool was_in = (dd_event_last_for_peer(peers[i].val, &last_type) == ESP_OK
+                       && last_type == DD_EV_IN);
+
         s_presence[free_idx].used = true;
         memcpy(s_presence[free_idx].addr, peers[i].val, 6);
-        s_presence[free_idx].present = false;
-        s_presence[free_idx].ack_event = false;
-        s_presence[free_idx].probing = false;
-        s_presence[free_idx].probe_handle = 0xFFFF;
+        s_presence[free_idx].present       = was_in;
+        s_presence[free_idx].ack_event     = was_in;
+        s_presence[free_idx].probing       = false;
+        s_presence[free_idx].connected     = false;
+        s_presence[free_idx].probe_handle  = 0xFFFF;
         s_presence[free_idx].last_probe_us = 0;
-        s_presence[free_idx].last_seen_us = 0;
-        ESP_LOGI(TAG, "presence slot %d pre-allocated for bond %02x:%02x:%02x:%02x:%02x:%02x (addr_type=%d)",
+        // For "still in" peers, prime last_seen=now so the OUT timer starts
+        // fresh — gives the upcoming probe/scan a chance to confirm before
+        // we'd ever fire OUT. For "was out / never seen" peers, leave it 0
+        // so the OUT-state re-probe loop kicks in immediately.
+        s_presence[free_idx].last_seen_us  = was_in ? now_us : 0;
+        ESP_LOGI(TAG, "presence slot %d pre-allocated for bond %02x:%02x:%02x:%02x:%02x:%02x"
+                      " (last_event=%s -> present=%d ack=%d)",
                  free_idx,
                  peers[i].val[0], peers[i].val[1], peers[i].val[2],
                  peers[i].val[3], peers[i].val[4], peers[i].val[5],
-                 peers[i].type);
+                 was_in ? "in" : "out/none", was_in, was_in);
     }
 }
 

@@ -81,6 +81,79 @@ const char *dd_event_source_str(dd_event_source_t s)
     }
 }
 
+// dd_event_last_for_peer: scan events.jsonl, keep the latest event whose
+// "peer" field matches the given addr. Latest = highest mono_us (mono_us is
+// always present + monotonic per-boot, but events may span multiple boots
+// with reset mono. So pair (ts, mono_us) gives the right ordering when ts
+// is non-zero; for the rare ts=0 entries we fall back to file order, which
+// is also append-order = arrival-order).
+typedef struct {
+    char     addr_str[18];
+    int64_t  best_ts;
+    int64_t  best_mono;
+    int      best_idx;     // file-order index, used when ts is 0
+    int      cur_idx;
+    bool     found;
+    dd_event_type_t type;
+} last_evt_ctx_t;
+
+static esp_err_t last_for_peer_cb(const char *line, void *arg)
+{
+    last_evt_ctx_t *c = arg;
+    c->cur_idx++;
+    cJSON *j = cJSON_Parse(line);
+    if (!j) return ESP_OK;
+
+    const cJSON *peer  = cJSON_GetObjectItem(j, "peer");
+    const cJSON *typej = cJSON_GetObjectItem(j, "type");
+    const cJSON *tsj   = cJSON_GetObjectItem(j, "ts");
+    const cJSON *monoj = cJSON_GetObjectItem(j, "mono_us");
+
+    if (!cJSON_IsString(peer) || !cJSON_IsString(typej) ||
+        strcmp(peer->valuestring, c->addr_str) != 0) {
+        cJSON_Delete(j); return ESP_OK;
+    }
+
+    int64_t ts   = cJSON_IsNumber(tsj)   ? (int64_t)tsj->valuedouble   : 0;
+    int64_t mono = cJSON_IsNumber(monoj) ? (int64_t)monoj->valuedouble : 0;
+
+    bool newer = false;
+    if (!c->found) {
+        newer = true;
+    } else if (ts > 0 && c->best_ts > 0) {
+        newer = (ts > c->best_ts) ||
+                (ts == c->best_ts && mono > c->best_mono);
+    } else {
+        // Fall back to file order when ts is missing/zero.
+        newer = c->cur_idx > c->best_idx;
+    }
+
+    if (newer) {
+        c->found = true;
+        c->best_ts   = ts;
+        c->best_mono = mono;
+        c->best_idx  = c->cur_idx;
+        c->type = (strcmp(typej->valuestring, "in") == 0) ? DD_EV_IN : DD_EV_OUT;
+    }
+    cJSON_Delete(j);
+    return ESP_OK;
+}
+
+esp_err_t dd_event_last_for_peer(const uint8_t peer_addr[6],
+                                  dd_event_type_t *out_type)
+{
+    if (!peer_addr || !out_type) return ESP_ERR_INVALID_ARG;
+    last_evt_ctx_t c = { .cur_idx = 0, .best_idx = -1, .found = false };
+    snprintf(c.addr_str, sizeof(c.addr_str),
+             "%02x:%02x:%02x:%02x:%02x:%02x",
+             peer_addr[0], peer_addr[1], peer_addr[2],
+             peer_addr[3], peer_addr[4], peer_addr[5]);
+    dd_storage_event_iter(last_for_peer_cb, &c);
+    if (!c.found) return ESP_ERR_NOT_FOUND;
+    *out_type = c.type;
+    return ESP_OK;
+}
+
 esp_err_t dd_event_record(dd_event_type_t type, dd_event_source_t src,
                           const uint8_t peer_addr[6], int reason,
                           const char *note)
