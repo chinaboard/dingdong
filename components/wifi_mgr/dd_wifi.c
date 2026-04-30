@@ -80,11 +80,22 @@ static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *da
             ESP_LOGI(TAG, "STA started, connecting");
             esp_wifi_connect();
             break;
-        case WIFI_EVENT_STA_DISCONNECTED:
+        case WIFI_EVENT_STA_DISCONNECTED: {
+            wifi_event_sta_disconnected_t *e = data;
             if (s_sta_down_since_us == 0) s_sta_down_since_us = esp_timer_get_time();
             if (s_sta_retry < STA_RETRY_MAX) {
                 s_sta_retry++;
-                ESP_LOGW(TAG, "STA disconnected, retry %d/%d", s_sta_retry, STA_RETRY_MAX);
+                ESP_LOGW(TAG, "STA disconnected, retry %d/%d (reason=%d %s)",
+                         s_sta_retry, STA_RETRY_MAX, e->reason,
+                         e->reason == 2   ? "AUTH_EXPIRE"           :
+                         e->reason == 15  ? "4WAY_HANDSHAKE_TIMEOUT" :
+                         e->reason == 200 ? "BEACON_TIMEOUT"        :
+                         e->reason == 201 ? "NO_AP_FOUND"           :
+                         e->reason == 202 ? "AUTH_FAIL"             :
+                         e->reason == 203 ? "ASSOC_FAIL"            :
+                         e->reason == 204 ? "HANDSHAKE_TIMEOUT"     :
+                         e->reason == 205 ? "CONNECTION_FAIL"       :
+                         e->reason == 207 ? "ROAMING"               : "?");
                 esp_wifi_connect();
                 s_state = DD_WIFI_STATE_STA_CONNECTING;
             } else {
@@ -106,6 +117,7 @@ static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *da
                 esp_timer_start_periodic(s_sta_giveup_timer, 60ULL * 1000 * 1000);
             }
             break;
+        }
         case WIFI_EVENT_AP_START: {
             esp_netif_ip_info_t ip;
             esp_netif_get_ip_info(s_netif_ap, &ip);
