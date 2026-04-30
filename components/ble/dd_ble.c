@@ -1293,3 +1293,23 @@ bool dd_ble_bond_exists(const uint8_t addr[6])
     }
     return false;
 }
+
+int dd_ble_presence_snapshot(dd_ble_presence_snapshot_t *out, int cap)
+{
+    if (!out || cap <= 0) return 0;
+    int64_t now = esp_timer_get_time();
+    int n = 0;
+    for (int i = 0; i < PRESENCE_MAX && n < cap; i++) {
+        if (!s_presence[i].used) continue;
+        out[n].used      = true;
+        memcpy(out[n].addr, s_presence[i].addr, 6);
+        out[n].present   = s_presence[i].present;
+        out[n].ack_event = s_presence[i].ack_event;
+        out[n].connected = s_presence[i].connected;
+        out[n].probing   = s_presence[i].probing;
+        out[n].last_seen_ago_ms  = s_presence[i].last_seen_us  ? (now - s_presence[i].last_seen_us)  / 1000 : -1;
+        out[n].last_probe_ago_ms = s_presence[i].last_probe_us ? (now - s_presence[i].last_probe_us) / 1000 : -1;
+        n++;
+    }
+    return n;
+}

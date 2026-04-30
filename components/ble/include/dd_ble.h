@@ -68,6 +68,22 @@ void      dd_ble_presence_reset_events(void);
 int       dd_ble_get_presence_timeout_s(void);
 esp_err_t dd_ble_set_presence_timeout_s(int seconds);
 
+// Diagnostic snapshot of one presence slot. Used by /api/system/diag to
+// expose in-RAM state so we can debug why IN/OUT events look weird.
+typedef struct {
+    bool     used;
+    uint8_t  addr[6];
+    bool     present;
+    bool     ack_event;
+    bool     connected;
+    bool     probing;
+    int64_t  last_seen_ago_ms;   // -1 if never seen
+    int64_t  last_probe_ago_ms;  // -1 if never probed
+} dd_ble_presence_snapshot_t;
+
+// Fill `out` (caller buffer of `cap` slots), return number of slots in use.
+int       dd_ble_presence_snapshot(dd_ble_presence_snapshot_t *out, int cap);
+
 #ifdef __cplusplus
 }
 #endif

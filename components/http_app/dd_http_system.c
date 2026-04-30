@@ -741,6 +741,31 @@ esp_err_t diag_get(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "workers_count",  (double)dd_worker_count());
     cJSON_AddNumberToObject(j, "events_count",   (double)dd_storage_event_count());
 
+    // In-RAM presence-slot snapshot: lets us see WHY a peer is "currently in"
+    // without an OUT event, or vice versa. Useful for debugging weird IN/OUT
+    // patterns that don't match what the user actually did with the iPhone.
+    {
+        dd_ble_presence_snapshot_t slots[8];
+        int n = dd_ble_presence_snapshot(slots, 8);
+        cJSON *parr = cJSON_CreateArray();
+        for (int i = 0; i < n; i++) {
+            cJSON *ps = cJSON_CreateObject();
+            char addr_str[18];
+            dd_format_mac(slots[i].addr, addr_str);
+            cJSON_AddStringToObject(ps, "addr",      addr_str);
+            cJSON_AddBoolToObject  (ps, "present",   slots[i].present);
+            cJSON_AddBoolToObject  (ps, "ack_event", slots[i].ack_event);
+            cJSON_AddBoolToObject  (ps, "connected", slots[i].connected);
+            cJSON_AddBoolToObject  (ps, "probing",   slots[i].probing);
+            cJSON_AddNumberToObject(ps, "last_seen_ago_s",
+                slots[i].last_seen_ago_ms < 0 ? -1 : slots[i].last_seen_ago_ms / 1000);
+            cJSON_AddNumberToObject(ps, "last_probe_ago_s",
+                slots[i].last_probe_ago_ms < 0 ? -1 : slots[i].last_probe_ago_ms / 1000);
+            cJSON_AddItemToArray(parr, ps);
+        }
+        cJSON_AddItemToObject(j, "presence", parr);
+    }
+
     // Per-slot view: walk both ota_0/ota_1, read each app_desc and report
     // version + which one is running / which one OTA would write to next.
     const esp_partition_t *running = esp_ota_get_running_partition();
