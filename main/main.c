@@ -220,7 +220,11 @@ void app_main(void)
              dd_config_has_admin(), dd_config_has_wifi());
     ESP_LOGI(TAG, "==========================================");
 
+#ifndef DEBUG_WIFI_SSID
     ESP_ERROR_CHECK(dd_ble_start());
+#else
+    ESP_LOGW(TAG, "DEBUG_WIFI: skipping BLE start to test WiFi-only coex");
+#endif
     ESP_ERROR_CHECK(dd_led_init());
     ESP_ERROR_CHECK(dd_wifi_start());
     ESP_ERROR_CHECK(dd_http_start());

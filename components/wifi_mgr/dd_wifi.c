@@ -202,23 +202,17 @@ static esp_err_t start_sta(void)
     wifi_config_t cfg = { 0 };
     strncpy((char *)cfg.sta.ssid,     ssid, sizeof(cfg.sta.ssid) - 1);
     strncpy((char *)cfg.sta.password, pass, sizeof(cfg.sta.password) - 1);
-    cfg.sta.threshold.authmode = WIFI_AUTH_OPEN;  // accept any AP we can join
-    // Many home APs (especially recent OpenWrt / 华为 / 小米 stacks) advertise
-    // PMF as "capable but not required". The IDF default is pmf.capable=false,
-    // and some APs reply to the 4-way handshake from a non-PMF-capable client
-    // with EAPOL frames that we then time out on (reason=15). Declaring
-    // capable=true makes us announce PMF in the assoc request without
-    // requiring it — strict pre-PMF APs still accept us.
+    // PMF capable lets us auto-pick SAE on WPA2/3 mixed APs. We hit a
+    // U7-Pro Wi-Fi 7 AP where pure WPA2 (no SAE) silently fails the EAPOL
+    // 4-way handshake; with PMF capable + SAE we go through cleanly.
+    // required=false so we still join old WPA2-only APs.
     cfg.sta.pmf_cfg.capable  = true;
     cfg.sta.pmf_cfg.required = false;
 
     s_state = DD_WIFI_STATE_STA_CONNECTING;
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     // Country code CN unlocks 2.4 GHz channels 12–13 (default "01" only allows
-    // 1–11). If the user's AP is on ch12/13, the scan finds nothing and we
-    // dead-end at NO_AP_FOUND. Ignore-error: some IDF builds have this behind
-    // a Kconfig and return ESP_ERR_NOT_SUPPORTED — the connection still works
-    // on channels 1–11 even if the call is a no-op.
+    // 1–11). Best-effort — some IDF builds gate this behind Kconfig.
     esp_err_t cc_err = esp_wifi_set_country_code("CN", true);
     if (cc_err != ESP_OK) {
         ESP_LOGW(TAG, "set_country_code(CN) rc=%s", esp_err_to_name(cc_err));
