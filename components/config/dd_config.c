@@ -208,6 +208,22 @@ esp_err_t dd_config_get_wifi(char *ssid_out, size_t ssid_cap,
     if (!ssid_out || ssid_cap == 0 || !pass_out || pass_cap == 0)
         return ESP_ERR_INVALID_ARG;
 
+    // Debug override: hardcode WiFi creds at build time so a blank board
+    // boots straight into STA mode without going through the SoftAP setup
+    // wizard. Used for remote-board debugging only — never in CI / release.
+    //   make build DEBUG_WIFI_SSID='"IoToI"' DEBUG_WIFI_PASS='"54383845"'
+#ifdef DEBUG_WIFI_SSID
+    strncpy(ssid_out, DEBUG_WIFI_SSID, ssid_cap - 1);
+    ssid_out[ssid_cap - 1] = '\0';
+#ifdef DEBUG_WIFI_PASS
+    strncpy(pass_out, DEBUG_WIFI_PASS, pass_cap - 1);
+    pass_out[pass_cap - 1] = '\0';
+#else
+    pass_out[0] = '\0';
+#endif
+    return ESP_OK;
+#endif
+
     nvs_handle_t h;
     esp_err_t err = nvs_open(NS, NVS_READONLY, &h);
     if (err != ESP_OK) return err;
@@ -228,6 +244,11 @@ esp_err_t dd_config_get_wifi(char *ssid_out, size_t ssid_cap,
 
 dd_boot_mode_t dd_config_boot_mode(void)
 {
+    // Debug override: with hardcoded creds we always boot NORMAL (STA),
+    // skipping the admin-password gate and the SoftAP setup wizard.
+#ifdef DEBUG_WIFI_SSID
+    return DD_BOOT_NORMAL;
+#endif
     if (!dd_config_has_admin()) return DD_BOOT_FIRST_RUN;
     if (!dd_config_has_wifi())  return DD_BOOT_NO_WIFI;
     return DD_BOOT_NORMAL;

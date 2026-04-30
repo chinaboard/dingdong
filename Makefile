@@ -48,6 +48,16 @@ EXTRA_CFLAGS := -DDD_TZ=\"$(TZ)\" \
                 -DDD_LED_GPIO=$(LED_GPIO) \
                 -DDD_LED_BRIGHTNESS=$(LED_BRIGHTNESS)
 
+# Debug-only WiFi cred override: skip the SoftAP setup wizard and boot a
+# blank board straight into STA mode using these creds. Never set in CI.
+#   make build DEBUG_WIFI_SSID=IoToI DEBUG_WIFI_PASS=54383845
+ifdef DEBUG_WIFI_SSID
+EXTRA_CFLAGS += -DDEBUG_WIFI_SSID=\"$(DEBUG_WIFI_SSID)\"
+endif
+ifdef DEBUG_WIFI_PASS
+EXTRA_CFLAGS += -DDEBUG_WIFI_PASS=\"$(DEBUG_WIFI_PASS)\"
+endif
+
 DOCKER_RUN = docker run --rm -v $(PWD):/project -w /project \
              -e IDF_TARGET=$(IDF_TARGET) -e EXTRA_CFLAGS="$(EXTRA_CFLAGS)" $(IDF_IMAGE)
 DOCKER_TTY = docker run --rm -it -v $(PWD):/project -w /project \
