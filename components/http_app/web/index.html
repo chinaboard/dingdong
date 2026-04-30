@@ -352,6 +352,7 @@ const I18N = {
     'overview.in_out_events':'{0} in/out events',
     'overview.stat_bonded':'Bonded', 'overview.unit_iphone':'iPhone',
     'overview.of_workers':'of {0} workers',
+    'overview.bond_cap':'cap {0}',
     'overview.today_label':"Today's check-ins",
     'overview.cal_label':'Last 30 days',
     'overview.res_label':'Device resources',
@@ -511,6 +512,7 @@ const I18N = {
     'overview.in_out_events':'{0} 条进/出记录',
     'overview.stat_bonded':'已配对', 'overview.unit_iphone':'部',
     'overview.of_workers':'/ 共 {0} 名员工',
+    'overview.bond_cap':'上限 {0}',
     'overview.today_label':'今日打卡',
     'overview.cal_label':'最近 30 天',
     'overview.res_label':'设备资源',
@@ -900,7 +902,7 @@ async function loadOverview(){
     $('statsRow').innerHTML=`
       <div class=stat><div class=k>${t('overview.stat_on_site')}</div><div class=v>${inNow}<span class=unit>${t('overview.unit_people')}</span></div><div class=sub>${t('overview.active_workers',ws.length)}</div></div>
       <div class=stat><div class=k>${t('overview.stat_active')}</div><div class=v>${totalSegs}<span class=unit>${t('overview.unit_sessions')}</span></div><div class=sub>${t('overview.in_out_events',ws.reduce((a,w)=>a+w.segments*2,0))}</div></div>
-      <div class=stat><div class=k>${t('overview.stat_bonded')}</div><div class=v>${bondsR.count}<span class=unit>${t('overview.unit_iphone')}</span></div><div class=sub>${t('overview.of_workers',state.workers.length)}</div></div>`;
+      <div class=stat><div class=k>${t('overview.stat_bonded')}</div><div class=v>${bondsR.count}<span class=unit>${t('overview.unit_iphone')}</span></div><div class=sub>${t('overview.of_workers',state.workers.length)} · ${t('overview.bond_cap',bondsR.max||8)}</div></div>`;
     if(ws.length===0){$('todayList').innerHTML=`<div class=empty>${t('overview.no_today')}</div>`;}
     else{
       $('todayList').innerHTML=`<table>

@@ -17,7 +17,10 @@ CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 # --- Bluetooth (NimBLE host) ---
 CONFIG_BT_ENABLED=y
 CONFIG_BT_NIMBLE_ENABLED=y
-CONFIG_BT_NIMBLE_MAX_CONNECTIONS=2
+# 8 concurrent connections — we hold a persistent connection to each
+# in-range bonded peer (BLE-geofence model). With BOND_MAX_LIST=8 this
+# matches the upper bound. ~1 KB RAM per connection slot.
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=8
 
 # Extended advertising: 2 instances (HID + BTHome time broadcaster).
 # HID instance uses legacy_pdu for iPhone backward-compat.

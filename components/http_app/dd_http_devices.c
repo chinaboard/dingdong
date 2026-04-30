@@ -186,6 +186,7 @@ esp_err_t bonds_get(httpd_req_t *req)
     }
     cJSON_AddItemToObject(root, "bonds", arr);
     cJSON_AddNumberToObject(root, "count", n);
+    cJSON_AddNumberToObject(root, "max",   8);   // BOND_MAX_LIST in dd_ble.c
     return reply_json_status(req, "200 OK", root);
 }
 

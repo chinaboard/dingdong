@@ -92,6 +92,7 @@ typedef struct {
     bool     present;           // currently in proximity (last_seen recent)
     bool     ack_event;         // IN event has been recorded for this proximity window
     bool     probing;           // a connect-probe is in flight
+    bool     connected;         // we hold a live connection to this peer (probe-initiated or HID-accepted)
     uint16_t probe_handle;      // conn handle for in-flight probe (0xFFFF if none)
     bool     used;
 } presence_slot_t;
@@ -182,18 +183,19 @@ static int probe_event_cb(struct ble_gap_event *event, void *arg)
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
         if (event->connect.status == 0) {
-            ESP_LOGI(TAG, "probe OK slot=%d → refresh, drop conn", (int)slot_idx);
+            ESP_LOGI(TAG, "probe OK slot=%d → holding conn (geofence)", (int)slot_idx);
             s->probe_handle = event->connect.conn_handle;
-            // Successful probe is the strongest "still here" signal we have.
-            // Route through presence_seen_addr so present=true is set + IN
-            // event fires when we were previously OUT (catch-up path in
-            // presence_tick_cb). Just touching last_seen_us isn't enough —
-            // it'd leave present=false and the OUT-state re-probe would
-            // keep poking forever instead of recognising the peer is back.
+            s->connected = true;
+            s->probing = false;
+            // Hold the connection. iOS keeps the BLE link alive while the
+            // peer is in range; if the peer leaves range or iOS aggressively
+            // drops the link (deep sleep), we'll see DISCONNECT below and
+            // start the OUT timer. Routing through presence_seen_addr
+            // flips present=true and fires IN if not already.
             presence_seen_addr(s->addr);
-            // Disconnect immediately; scanner restart deferred until
-            // DISCONNECT below.
-            ble_gap_terminate(event->connect.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+            // Restart scanner — we want to keep seeing other peers' adverts
+            // while this connection sits idle.
+            schedule_scan_restart(50);
         } else {
             ESP_LOGI(TAG, "probe FAIL slot=%d status=%d", (int)slot_idx, event->connect.status);
             s->probing = false;
@@ -203,9 +205,17 @@ static int probe_event_cb(struct ble_gap_event *event, void *arg)
 
     case BLE_GAP_EVENT_DISCONNECT:
         if (s->probe_handle == event->disconnect.conn.conn_handle) {
+            ESP_LOGI(TAG, "geofence link DOWN slot=%d (peer out of range or iOS dropped) reason=0x%02x",
+                     (int)slot_idx, event->disconnect.reason);
             s->probe_handle = 0xFFFF;
             s->probing = false;
-            schedule_scan_restart(50);  // probe over, scanner can resume
+            s->connected = false;
+            // Fresh last_seen so the OUT timer starts NOW. If the peer is
+            // still in range, the next OUT-state re-probe (30s) should
+            // re-establish quickly. If it's truly gone, OUT fires after
+            // PRESENCE_TIMEOUT_MS.
+            s->last_seen_us = esp_timer_get_time();
+            schedule_scan_restart(50);
         }
         return 0;
 
@@ -268,6 +278,19 @@ static void presence_tick_cb(void *arg)
     int64_t now = esp_timer_get_time();
     for (int i = 0; i < PRESENCE_MAX; i++) {
         if (!s_presence[i].used) continue;
+
+        // Geofence: if we hold a live BLE connection to this peer, presence
+        // is definitive. Refresh last_seen continuously so when the link
+        // eventually drops (iOS deep-sleep idle, peer leaves range), the
+        // OUT timer starts from "now" rather than "minutes ago".
+        if (s_presence[i].connected) {
+            s_presence[i].last_seen_us = now;
+            if (!s_presence[i].present) {
+                s_presence[i].present = true;
+                s_presence[i].ack_event = false;  // catch-up below fires IN
+            }
+        }
+
         // Catch-up: peer is in proximity but we couldn't record IN earlier
         // (NTP wasn't synced yet, or events were just wiped).
         if (s_presence[i].present && !s_presence[i].ack_event &&
@@ -279,6 +302,11 @@ static void presence_tick_cb(void *arg)
             dd_event_record(DD_EV_IN, DD_SRC_BLE_AUTO, s_presence[i].addr, 0, NULL);
             s_presence[i].ack_event = true;
         }
+
+        // While connected: nothing more to do. No probe scheduling, no OUT
+        // timer evaluation. The DISCONNECT handler will drop us into the
+        // probe-and-OUT path when the link goes down.
+        if (s_presence[i].connected) continue;
 
         // OUT-state re-probe: keep poking the bonded peer every
         // PRESENCE_REPROBE_OUT_MS to catch silent returns. Without this,
@@ -732,6 +760,17 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
                 // We deliberately use peer_id_addr (the resolved identity),
                 // not the on-air RPA, so it matches the bond store entries.
                 presence_seen_addr(desc.peer_id_addr.val);
+                // Mark the bonded slot as connected — geofence model. While
+                // connected we treat the peer as definitely present, no
+                // need to probe / no OUT timer.
+                for (int i = 0; i < PRESENCE_MAX; i++) {
+                    if (s_presence[i].used &&
+                        memcmp(s_presence[i].addr, desc.peer_id_addr.val, 6) == 0) {
+                        s_presence[i].connected = true;
+                        ESP_LOGI(TAG, "geofence: bonded peer slot %d connected (HID-side)", i);
+                        break;
+                    }
+                }
             }
         } else {
             // failed; restart adv (deferred — controller still busy with the
@@ -743,9 +782,19 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_DISCONNECT: {
         ESP_LOGI(TAG, "disconnect handle=%d reason=%d",
                  event->disconnect.conn.conn_handle, event->disconnect.reason);
-        // OUT events are owned by the scanner-driven presence machine — a
-        // disconnect just means iPhone closed the HID session, not that the
-        // human left the room.
+        // Geofence: clear connected flag for whichever bonded slot owned this
+        // conn handle. Refresh last_seen so the OUT timer starts NOW; the
+        // OUT-state re-probe will try to re-establish within 30s and only
+        // fire OUT after PRESENCE_TIMEOUT_MS of consecutive failures.
+        for (int i = 0; i < PRESENCE_MAX; i++) {
+            if (s_presence[i].used &&
+                memcmp(s_presence[i].addr, event->disconnect.conn.peer_id_addr.val, 6) == 0) {
+                s_presence[i].connected = false;
+                s_presence[i].last_seen_us = esp_timer_get_time();
+                ESP_LOGI(TAG, "geofence: bonded peer slot %d disconnected", i);
+                break;
+            }
+        }
         // Defer adv restart so the controller has time to settle (otherwise
         // wl_set / ext_adv_configure return EBUSY and we end up not
         // advertising at all → iPhone can't auto-reconnect).
