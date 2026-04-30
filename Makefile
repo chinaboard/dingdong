@@ -4,8 +4,9 @@
 # pass through USB. Flash/monitor run on the host with espflash, which talks
 # to /dev/cu.usbmodem101 directly.
 #
-# Pick chip target with TARGET=c3 or TARGET=c6 (default c6). Switching target
-# requires `make fullclean` first — IDF won't reconfigure across chip families.
+# Pick chip target with TARGET=c3 or TARGET=c6 (default c6). Each target has
+# its own build directory (build-esp32cN/) so you can keep both binaries
+# around and switch with no fullclean dance.
 
 PORT       ?= /dev/cu.usbmodem101
 BAUD       ?= 921600
@@ -13,6 +14,10 @@ IDF_IMAGE  ?= espressif/idf:v6.0.1
 PROJECT    ?= dingdong
 TARGET     ?= c6
 IDF_TARGET := esp32$(TARGET)
+BUILD_DIR  := build-$(IDF_TARGET)
+# Per-target sdkconfig (the generated one with all expanded settings).
+# Defaults overlay still comes from sdkconfig.defaults + sdkconfig.defaults.$(IDF_TARGET).
+SDKCONFIG  := sdkconfig.$(IDF_TARGET)
 
 # Build-time timezone (POSIX TZ string). Override per region:
 #   make build TZ=JST-9        # Japan
@@ -44,14 +49,14 @@ DOCKER_TTY = docker run --rm -it -v $(PWD):/project -w /project \
 .PHONY: build flash monitor flash-monitor erase clean fullclean menuconfig size shell
 
 build:
-	$(DOCKER_RUN) idf.py reconfigure build
+	$(DOCKER_RUN) idf.py -B $(BUILD_DIR) -DSDKCONFIG=$(SDKCONFIG) reconfigure build
 
 flash:
 	espflash flash \
 		--port $(PORT) --baud $(BAUD) \
-		--partition-table build/partition_table/partition-table.bin \
-		--bootloader build/bootloader/bootloader.bin \
-		build/$(PROJECT).elf
+		--partition-table $(BUILD_DIR)/partition_table/partition-table.bin \
+		--bootloader $(BUILD_DIR)/bootloader/bootloader.bin \
+		$(BUILD_DIR)/$(PROJECT).elf
 
 monitor:
 	espflash monitor --port $(PORT)
@@ -62,16 +67,19 @@ erase:
 	espflash erase-flash --port $(PORT)
 
 size:
-	$(DOCKER_RUN) idf.py size
+	$(DOCKER_RUN) idf.py -B $(BUILD_DIR) -DSDKCONFIG=$(SDKCONFIG) size
 
 menuconfig:
-	$(DOCKER_TTY) idf.py menuconfig
+	$(DOCKER_TTY) idf.py -B $(BUILD_DIR) -DSDKCONFIG=$(SDKCONFIG) menuconfig
 
 shell:
 	$(DOCKER_TTY) bash
 
 clean:
-	$(DOCKER_RUN) idf.py fullclean
+	$(DOCKER_RUN) idf.py -B $(BUILD_DIR) -DSDKCONFIG=$(SDKCONFIG) fullclean
 
+# Wipe ALL per-target build dirs + generated sdkconfigs + managed components.
+# Careful: only delete sdkconfig.esp32cN (generated), NOT sdkconfig.defaults*
+# (checked into git as the source of truth).
 fullclean:
-	rm -rf build sdkconfig managed_components dependencies.lock
+	rm -rf build build-* sdkconfig sdkconfig.esp32* managed_components dependencies.lock

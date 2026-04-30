@@ -49,13 +49,14 @@ jobs:
       # safe.directory needed because container runs as a different uid than
       # the file owner on the GH runner. IDF_TARGET selects which sdkconfig
       # overlay (sdkconfig.defaults.${{ matrix.target }}) to layer on top.
+      # Build dir is per-target so the matrix jobs don't fight each other.
       - name: Build firmware
         run: |
           docker run --rm -v "$PWD:/project" -w /project \
             -e IDF_TARGET=${{ matrix.target }} \
             -e EXTRA_CFLAGS='-DDD_TZ="CST-8" -DDD_LED_ENABLE=1 -DDD_LED_GPIO=8 -DDD_LED_BRIGHTNESS=10' \
             espressif/idf:v6.0.1 \
-            bash -c "git config --global --add safe.directory /project && idf.py reconfigure build"
+            bash -c "git config --global --add safe.directory /project && idf.py -B build-${{ matrix.target }} -DSDKCONFIG=sdkconfig.${{ matrix.target }} reconfigure build"
 
       # Stage everything a fresh device needs to come up. The merged
       # `dingdong-merged.bin` is the easiest path for end users (single
@@ -64,18 +65,19 @@ jobs:
       # carry the chip target so a multi-target release doesn't collide.
       - name: Stage release assets
         run: |
+          B=build-${{ matrix.target }}
           mkdir -p release
-          cp build/dingdong.bin                          "release/dingdong-${{ matrix.target }}-${FULL_VER}.bin"
-          cp build/bootloader/bootloader.bin             "release/bootloader-${{ matrix.target }}.bin"
-          cp build/partition_table/partition-table.bin   "release/partition-table-${{ matrix.target }}.bin"
-          cp build/ota_data_initial.bin                  "release/ota_data_initial-${{ matrix.target }}.bin"
+          cp $B/dingdong.bin                          "release/dingdong-${{ matrix.target }}-${FULL_VER}.bin"
+          cp $B/bootloader/bootloader.bin             "release/bootloader-${{ matrix.target }}.bin"
+          cp $B/partition_table/partition-table.bin   "release/partition-table-${{ matrix.target }}.bin"
+          cp $B/ota_data_initial.bin                  "release/ota_data_initial-${{ matrix.target }}.bin"
           docker run --rm -v "$PWD:/project" -w /project \
             espressif/idf:v6.0.1 \
             python -m esptool --chip ${{ matrix.target }} merge-bin -o "release/dingdong-merged-${{ matrix.target }}-${FULL_VER}.bin" \
-              0x0      build/bootloader/bootloader.bin \
-              0x8000   build/partition_table/partition-table.bin \
-              0x10000  build/ota_data_initial.bin \
-              0x20000  build/dingdong.bin
+              0x0      $B/bootloader/bootloader.bin \
+              0x8000   $B/partition_table/partition-table.bin \
+              0x10000  $B/ota_data_initial.bin \
+              0x20000  $B/dingdong.bin
           ls -lh release/
 
       - uses: actions/upload-artifact@v4
