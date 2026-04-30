@@ -43,54 +43,34 @@ jobs:
           echo "version=$VER"   >> "$GITHUB_OUTPUT"
           echo "Building $VER for ${{ matrix.board }}"
 
-      # Read board defaults the same way the local Makefile does so CI and
-      # dev builds agree byte-for-byte. Each board file sets TARGET / LED_*
-      # using Makefile-style `KEY ?= value` with column alignment; convert
-      # to plain shell assignments (no whitespace around =, no trailing
-      # comments) before sourcing.
-      - id: board
-        run: |
-          sed -E 's/[[:space:]]*\?=[[:space:]]*/=/; s/[[:space:]]*#.*//' \
-              boards/${{ matrix.board }}.mk > /tmp/board.env
-          set -a; . /tmp/board.env; set +a
-          echo "IDF_TARGET=esp32$TARGET"          >> "$GITHUB_ENV"
-          echo "LED_ENABLE=${LED_ENABLE:-1}"      >> "$GITHUB_ENV"
-          echo "LED_KIND=${LED_KIND:-1}"          >> "$GITHUB_ENV"
-          echo "LED_GPIO=${LED_GPIO:-8}"          >> "$GITHUB_ENV"
-          echo "LED_BRIGHTNESS=${LED_BRIGHTNESS:-10}" >> "$GITHUB_ENV"
-
-      # Reuse the exact docker invocation from the local Makefile so CI
-      # builds are bit-for-bit comparable with developer builds. Build dir
-      # is per-target so the matrix jobs don't fight each other.
+      # Just call the same Makefile developers use locally — it handles
+      # board-overlay include, EXTRA_CFLAGS construction, docker invocation,
+      # and per-target build dir. CI doesn't need to know any of those bits;
+      # if you can build it on your laptop with `make build BOARD=X`, CI
+      # builds it the same way.
       - name: Build firmware
-        run: |
-          docker run --rm -v "$PWD:/project" -w /project \
-            -e IDF_TARGET=$IDF_TARGET \
-            -e EXTRA_CFLAGS="-DDD_TZ=\"CST-8\" -DDD_LED_ENABLE=$LED_ENABLE -DDD_LED_KIND=$LED_KIND -DDD_LED_GPIO=$LED_GPIO -DDD_LED_BRIGHTNESS=$LED_BRIGHTNESS" \
-            espressif/idf:v6.0.1 \
-            bash -c "git config --global --add safe.directory /project && idf.py -B build-$IDF_TARGET -DSDKCONFIG=sdkconfig.$IDF_TARGET reconfigure build"
+        run: make build BOARD=${{ matrix.board }}
 
-      # Stage everything a fresh device needs to come up. The merged
-      # `dingdong-merged.bin` is the easiest path for end users (single
-      # esptool write_flash 0x0); the individual files are kept for anyone
-      # using espflash with --bootloader / --partition-table. Filenames
-      # carry the board name so a multi-board release doesn't collide.
+      # BOARD name suffix is the chip target (e.g. supermini-c6 → c6 → esp32c6),
+      # which is also the build dir name. Single source of truth, no manual
+      # config plumbing needed.
       - name: Stage release assets
         run: |
-          B=build-$IDF_TARGET
           BOARD=${{ matrix.board }}
+          IDF_TARGET=esp32${BOARD##*-}              # supermini-c6 → esp32c6
+          BD=build-$IDF_TARGET
           mkdir -p release
-          cp $B/dingdong.bin                          "release/dingdong-${BOARD}-${FULL_VER}.bin"
-          cp $B/bootloader/bootloader.bin             "release/bootloader-${BOARD}.bin"
-          cp $B/partition_table/partition-table.bin   "release/partition-table-${BOARD}.bin"
-          cp $B/ota_data_initial.bin                  "release/ota_data_initial-${BOARD}.bin"
+          cp $BD/dingdong.bin                          "release/dingdong-${BOARD}-${FULL_VER}.bin"
+          cp $BD/bootloader/bootloader.bin             "release/bootloader-${BOARD}.bin"
+          cp $BD/partition_table/partition-table.bin   "release/partition-table-${BOARD}.bin"
+          cp $BD/ota_data_initial.bin                  "release/ota_data_initial-${BOARD}.bin"
           docker run --rm -v "$PWD:/project" -w /project \
             espressif/idf:v6.0.1 \
             python -m esptool --chip $IDF_TARGET merge-bin -o "release/dingdong-merged-${BOARD}-${FULL_VER}.bin" \
-              0x0      $B/bootloader/bootloader.bin \
-              0x8000   $B/partition_table/partition-table.bin \
-              0x10000  $B/ota_data_initial.bin \
-              0x20000  $B/dingdong.bin
+              0x0      $BD/bootloader/bootloader.bin \
+              0x8000   $BD/partition_table/partition-table.bin \
+              0x10000  $BD/ota_data_initial.bin \
+              0x20000  $BD/dingdong.bin
           ls -lh release/
 
       - uses: actions/upload-artifact@v4
