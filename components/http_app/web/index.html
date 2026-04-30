@@ -834,10 +834,10 @@ function renderSetup(){
     try{
       const r=await fetch('/api/wifi/scan');
       if(!r.ok){box.textContent=t('setup.wifi_scan_fail');return;}
-      const list=await r.json();
+      const d=await r.json();
       // Dedupe + sort by RSSI desc (strongest first).
       const seen=new Set(); const aps=[];
-      for(const a of list){
+      for(const a of (d.aps||[])){
         if(!a.ssid || seen.has(a.ssid))continue;
         seen.add(a.ssid); aps.push(a);
       }

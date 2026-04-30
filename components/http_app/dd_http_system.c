@@ -26,6 +26,7 @@
 #include "dd_log.h"
 #include "dd_storage.h"
 #include "dd_time.h"
+#include "dd_util.h"
 #include "dd_wifi.h"
 #include "dd_worker.h"
 
@@ -517,7 +518,7 @@ static esp_err_t worker_to_backup_cb(const dd_worker_t *w, void *arg)
     cJSON *e = cJSON_CreateObject();
     cJSON_AddNumberToObject(e, "id", w->id);
     char addr_str[18];
-    format_mac(w->addr, addr_str);
+    dd_format_mac(w->addr, addr_str);
     cJSON_AddStringToObject(e, "addr", addr_str);
     cJSON_AddStringToObject(e, "name", w->name);
     cJSON_AddStringToObject(e, "category", w->category);
@@ -682,9 +683,7 @@ esp_err_t diag_get(httpd_req_t *req)
 
     esp_chip_info_t info; esp_chip_info(&info);
     cJSON *chip = cJSON_CreateObject();
-    cJSON_AddStringToObject(chip, "model",
-        info.model == CHIP_ESP32C6 ? "ESP32-C6" :
-        info.model == CHIP_ESP32C3 ? "ESP32-C3" : "?");
+    cJSON_AddStringToObject(chip, "model", dd_chip_model_str(info.model));
     cJSON_AddNumberToObject(chip, "rev_major", info.revision / 100);
     cJSON_AddNumberToObject(chip, "rev_minor", info.revision % 100);
     cJSON_AddNumberToObject(chip, "cores", info.cores);
@@ -692,12 +691,10 @@ esp_err_t diag_get(httpd_req_t *req)
         uint8_t mac[6];
         char buf[18];
         esp_read_mac(mac, ESP_MAC_WIFI_STA);
-        snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        dd_format_mac(mac, buf);
         cJSON_AddStringToObject(chip, "mac_wifi", buf);
         esp_read_mac(mac, ESP_MAC_BT);
-        snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        dd_format_mac(mac, buf);
         cJSON_AddStringToObject(chip, "mac_bt", buf);
         char host[24];
         snprintf(host, sizeof(host), "dingdong-%02x%02x", mac[4], mac[5]);

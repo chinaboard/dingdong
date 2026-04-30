@@ -12,6 +12,7 @@
 #include "dd_event.h"
 #include "dd_storage.h"
 #include "dd_time.h"
+#include "dd_util.h"
 #include "dd_worker.h"
 
 #include "http_internal.h"
@@ -323,7 +324,7 @@ static void emit_segment(pair_ctx_t *ctx, const pair_open_t *open,
     cJSON_AddNumberToObject(j, "worker_id", open->worker_id);
     if (open->has_addr) {
         char addr_str[18];
-        format_mac(open->addr, addr_str);
+        dd_format_mac(open->addr, addr_str);
         cJSON_AddStringToObject(j, "peer", addr_str);
     }
     cJSON_AddNumberToObject(j, "in_ts",  (double)open->in_ts);
@@ -728,7 +729,7 @@ esp_err_t today_get(httpd_req_t *req)
         }
         if (w->has_addr) {
             char addr_str[18];
-            format_mac(w->addr, addr_str);
+            dd_format_mac(w->addr, addr_str);
             cJSON_AddStringToObject(e, "peer", addr_str);
         }
         cJSON_AddNumberToObject(e, "total_seconds", w->total_seconds);

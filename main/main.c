@@ -22,6 +22,7 @@
 #include "dd_event.h"
 #include "dd_led.h"
 #include "dd_log.h"
+#include "dd_util.h"
 
 static const char *TAG = "dingdong";
 
@@ -178,8 +179,7 @@ static void dump_chip(void)
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_BT);
     ESP_LOGI(TAG, " chip=%s rev=%d.%d cores=%d",
-             info.model == CHIP_ESP32C6 ? "ESP32-C6" :
-             info.model == CHIP_ESP32C3 ? "ESP32-C3" : "?",
+             dd_chip_model_str(info.model),
              info.revision / 100, info.revision % 100, info.cores);
     ESP_LOGI(TAG, " BT MAC=%02x:%02x:%02x:%02x:%02x:%02x",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);

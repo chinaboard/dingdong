@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "dd_util.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "cJSON.h"
@@ -80,8 +81,7 @@ static esp_err_t save_one(nvs_handle_t h, const dd_worker_t *w)
     key_for_id(w->id, k, sizeof(k));
 
     char addr_str[18];
-    snprintf(addr_str, sizeof(addr_str), "%02x:%02x:%02x:%02x:%02x:%02x",
-             w->addr[0], w->addr[1], w->addr[2], w->addr[3], w->addr[4], w->addr[5]);
+    dd_format_mac(w->addr, addr_str);
 
     cJSON *j = cJSON_CreateObject();
     cJSON_AddStringToObject(j, "addr", addr_str);

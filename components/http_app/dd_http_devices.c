@@ -11,6 +11,7 @@
 #include "dd_ble.h"
 #include "dd_config.h"
 #include "dd_storage.h"
+#include "dd_util.h"
 #include "dd_worker.h"
 
 #include "http_internal.h"
@@ -88,7 +89,7 @@ static esp_err_t worker_to_json_cb(const dd_worker_t *w, void *arg)
     cJSON *j = cJSON_CreateObject();
     cJSON_AddNumberToObject(j, "id", w->id);
     char addr_str[18];
-    format_mac(w->addr, addr_str);
+    dd_format_mac(w->addr, addr_str);
     cJSON_AddStringToObject(j, "addr", addr_str);
     cJSON_AddStringToObject(j, "name", w->name);
     cJSON_AddStringToObject(j, "category", w->category);
@@ -177,7 +178,7 @@ esp_err_t bonds_get(httpd_req_t *req)
     cJSON *arr = cJSON_CreateArray();
     for (int i = 0; i < n; i++) {
         char addr_str[18];
-        format_mac(addrs[i], addr_str);
+        dd_format_mac(addrs[i], addr_str);
         cJSON *e = cJSON_CreateObject();
         cJSON_AddStringToObject(e, "addr", addr_str);
         cJSON_AddNumberToObject(e, "worker_id",
