@@ -1,5 +1,9 @@
 # --- Target ---
-CONFIG_IDF_TARGET="esp32c6"
+# Per-target IDF_TARGET lives in sdkconfig.defaults.esp32cN files so we can
+# build the same project for either chip:
+#   make build              # default (esp32c6)
+#   make build TARGET=c3    # esp32c3
+# IDF picks up sdkconfig.defaults.esp32cN automatically based on env IDF_TARGET.
 
 # --- Flash ---
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y

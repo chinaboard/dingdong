@@ -683,7 +683,8 @@ esp_err_t diag_get(httpd_req_t *req)
     esp_chip_info_t info; esp_chip_info(&info);
     cJSON *chip = cJSON_CreateObject();
     cJSON_AddStringToObject(chip, "model",
-        info.model == CHIP_ESP32C6 ? "ESP32-C6" : "?");
+        info.model == CHIP_ESP32C6 ? "ESP32-C6" :
+        info.model == CHIP_ESP32C3 ? "ESP32-C3" : "?");
     cJSON_AddNumberToObject(chip, "rev_major", info.revision / 100);
     cJSON_AddNumberToObject(chip, "rev_minor", info.revision % 100);
     cJSON_AddNumberToObject(chip, "cores", info.cores);

@@ -4,16 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-ESP-IDF firmware for ESP32-C6 (`espressif/idf:v6.0.1`). The device runs **continuous BLE scanning** to detect bonded iPhones in proximity via Resolvable-Private-Address (RPA) resolution against stored IRKs. Each "iPhone in range" → `check_in`, "out of range for >15s" → `check_out`. The device also advertises as a BLE HID keyboard (so iOS will bond and exchange the IRK in the first place). An admin Web UI (HTTP, single embedded gzipped HTML page) drives pairing, worker management, calendar/CSV export, and configuration. A WS2812 status LED on GPIO8 surfaces device health.
+ESP-IDF firmware for **ESP32-C6 (default) or ESP32-C3** (`espressif/idf:v6.0.1`). The device runs **continuous BLE scanning** to detect bonded iPhones in proximity via Resolvable-Private-Address (RPA) resolution against stored IRKs. Each "iPhone in range" → `check_in`, "out of range for >15s" → `check_out`. The device also advertises as a BLE HID keyboard (so iOS will bond and exchange the IRK in the first place). An admin Web UI (HTTP, single embedded gzipped HTML page) drives pairing, worker management, calendar/CSV export, and configuration. A WS2812 status LED on GPIO8 surfaces device health.
 
-Single binary produced: `build/dingdong.elf`. Target is fixed in `sdkconfig.defaults` (do not change in `menuconfig`).
+Single binary produced: `build/dingdong.elf`. Target chip is selected at build time via `make build TARGET=c6` (default) or `TARGET=c3`. Switching target requires `make fullclean` first.
 
 ## Build / Flash / Monitor
 
 Build runs **inside Docker** (macOS Docker can't pass USB through); flash/monitor run on the **host** with `espflash`. Both halves are wrapped by `Makefile`:
 
 ```bash
-make build                          # idf.py build inside espressif/idf:v6.0.1
+make build                          # idf.py build inside espressif/idf:v6.0.1 (default TARGET=c6)
+make build TARGET=c3                # build for ESP32-C3 instead
 make flash                          # espflash on host → /dev/cu.usbmodem101
 make monitor                        # espflash monitor (interactive)
 make flash-monitor
@@ -26,6 +27,15 @@ make fullclean                      # rm build/ sdkconfig managed_components/ de
 ```
 
 Override port: `make flash PORT=/dev/cu.xxx` (default `/dev/cu.usbmodem101`, baud `921600`). Headless serial-only sniff (when monitor's TTY requirement is in the way): `python3 /tmp/dd_log.py` (pyserial; opens /dev/cu.usbmodem101 @ 115200 raw).
+
+**Switching target chip**: `make fullclean && make build TARGET=c3` (or `c6`). The per-target overlay lives in `sdkconfig.defaults.esp32cN`; the common `sdkconfig.defaults` doesn't pin a chip. Resulting image sizes (as of v0.7.0):
+
+| Chip   | Image     | Slot %  | Heap free at idle |
+|--------|-----------|---------|-------------------|
+| ESP32-C6 | 1.39 MB | 90.8%   | ~218 KB           |
+| ESP32-C3 | 1.21 MB | 77.0%   | ~84 KB (tighter)  |
+
+C3's smaller image is largely the BLE 5.0 controller stack (no extended-adv / 5.3 features). C3's smaller heap budget — the chip has 400 KB SRAM vs C6's 512 KB — leaves ~84 KB free after WiFi+BLE+HTTP init in SoftAP mode. Adding many workers + concurrent OTA + heavy event traffic could push close to the 20 KB heap-watchdog warn threshold; keep an eye on `/api/system/status` `heap_free` in production deployments.
 
 There is no host toolchain assumption beyond Docker + `espflash` (`brew install espflash`). There is no test suite, no linter, and no CI configuration in-tree.
 

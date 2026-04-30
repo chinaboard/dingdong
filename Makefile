@@ -1,13 +1,18 @@
-# dingdong-fw — ESP32-C6 build/flash via Docker IDF + macOS espflash
+# dingdong-fw — ESP32-C3/C6 build/flash via Docker IDF + macOS espflash
 #
 # Build runs inside espressif/idf:v6.0.1 (Docker), since macOS Docker can't
 # pass through USB. Flash/monitor run on the host with espflash, which talks
 # to /dev/cu.usbmodem101 directly.
+#
+# Pick chip target with TARGET=c3 or TARGET=c6 (default c6). Switching target
+# requires `make fullclean` first — IDF won't reconfigure across chip families.
 
 PORT       ?= /dev/cu.usbmodem101
 BAUD       ?= 921600
 IDF_IMAGE  ?= espressif/idf:v6.0.1
 PROJECT    ?= dingdong
+TARGET     ?= c6
+IDF_TARGET := esp32$(TARGET)
 
 # Build-time timezone (POSIX TZ string). Override per region:
 #   make build TZ=JST-9        # Japan
@@ -31,8 +36,10 @@ EXTRA_CFLAGS := -DDD_TZ=\"$(TZ)\" \
                 -DDD_LED_GPIO=$(LED_GPIO) \
                 -DDD_LED_BRIGHTNESS=$(LED_BRIGHTNESS)
 
-DOCKER_RUN = docker run --rm -v $(PWD):/project -w /project -e EXTRA_CFLAGS="$(EXTRA_CFLAGS)" $(IDF_IMAGE)
-DOCKER_TTY = docker run --rm -it -v $(PWD):/project -w /project -e EXTRA_CFLAGS="$(EXTRA_CFLAGS)" $(IDF_IMAGE)
+DOCKER_RUN = docker run --rm -v $(PWD):/project -w /project \
+             -e IDF_TARGET=$(IDF_TARGET) -e EXTRA_CFLAGS="$(EXTRA_CFLAGS)" $(IDF_IMAGE)
+DOCKER_TTY = docker run --rm -it -v $(PWD):/project -w /project \
+             -e IDF_TARGET=$(IDF_TARGET) -e EXTRA_CFLAGS="$(EXTRA_CFLAGS)" $(IDF_IMAGE)
 
 .PHONY: build flash monitor flash-monitor erase clean fullclean menuconfig size shell
 
