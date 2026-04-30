@@ -44,16 +44,19 @@ jobs:
           echo "Building $VER for ${{ matrix.board }}"
 
       # Read board defaults the same way the local Makefile does so CI and
-      # dev builds agree byte-for-byte. Each board file sets TARGET / LED_*.
+      # dev builds agree byte-for-byte. Each board file sets TARGET / LED_*
+      # using Makefile-style `KEY ?= value` with column alignment; convert
+      # to plain shell assignments (no whitespace around =, no trailing
+      # comments) before sourcing.
       - id: board
         run: |
-          # Strip Makefile syntax to plain shell exports.
-          sed 's/?=/=/' boards/${{ matrix.board }}.mk > /tmp/board.env
+          sed -E 's/[[:space:]]*\?=[[:space:]]*/=/; s/[[:space:]]*#.*//' \
+              boards/${{ matrix.board }}.mk > /tmp/board.env
           set -a; . /tmp/board.env; set +a
-          echo "IDF_TARGET=esp32$TARGET"   >> "$GITHUB_ENV"
-          echo "LED_ENABLE=$LED_ENABLE"     >> "$GITHUB_ENV"
-          echo "LED_KIND=${LED_KIND:-1}"   >> "$GITHUB_ENV"
-          echo "LED_GPIO=${LED_GPIO:-8}"   >> "$GITHUB_ENV"
+          echo "IDF_TARGET=esp32$TARGET"          >> "$GITHUB_ENV"
+          echo "LED_ENABLE=${LED_ENABLE:-1}"      >> "$GITHUB_ENV"
+          echo "LED_KIND=${LED_KIND:-1}"          >> "$GITHUB_ENV"
+          echo "LED_GPIO=${LED_GPIO:-8}"          >> "$GITHUB_ENV"
           echo "LED_BRIGHTNESS=${LED_BRIGHTNESS:-10}" >> "$GITHUB_ENV"
 
       # Reuse the exact docker invocation from the local Makefile so CI
