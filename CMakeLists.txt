@@ -14,7 +14,7 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 # a clean version; off-tag dev builds get a self-describing string that
 # pinpoints the source state without needing a separate timestamp.
 execute_process(
-    COMMAND git describe --tags --dirty --always
+    COMMAND git -c safe.directory=* describe --tags --dirty --always
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     OUTPUT_VARIABLE GIT_DESC
     OUTPUT_STRIP_TRAILING_WHITESPACE
