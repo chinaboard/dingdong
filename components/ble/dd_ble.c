@@ -63,16 +63,21 @@ static esp_timer_handle_t s_scan_restart_timer = NULL;
 // Probe schedule for catching iPhones before OUT. iOS BLE peripherals run
 // connection intervals of 1-2.5s when locked + idle, so the full connect
 // handshake can take 5-7s. PROBE_TIMEOUT used to be 3s — which is *less*
-// than one full handshake worst-case — so probes failed even when the
-// iPhone was a metre away. Numbers chosen to fit ~3 probe attempts inside
-// the default 60s timeout window:
-//   probe at 15s stale (PROBE_AFTER) → 6s timeout
-//   if it failed, retry at ~31s (cooldown 10s after the previous probe ended)
-//   if that failed, retry at ~47s
-//   OUT at 60s if all three failed
+// than one full handshake worst-case. 10s gives the controller two full
+// connection intervals to wake + finish handshake even from deep sleep.
+//   probe at 15s stale (PROBE_AFTER) → 10s timeout
+//   if it failed, retry at ~35s (cooldown 10s after the previous probe ended)
+//   OUT at 60s if both failed
 #define PRESENCE_PROBE_AFTER_MS   15000
-#define PRESENCE_PROBE_TIMEOUT_MS  6000
+#define PRESENCE_PROBE_TIMEOUT_MS 10000
 #define PRESENCE_PROBE_COOLDOWN_MS 10000
+// While present=false, keep probing periodically. iPhones go silent on BLE
+// adv when locked + idle, so passive scan can miss returning peers
+// indefinitely; an active probe reliably wakes them. 30s gives a worst-case
+// 30s recovery latency once the phone returns. Bonded peers get pre-
+// allocated slots at boot, so this also drives FIRST detection on a fresh
+// boot when the iPhone hasn't sent a single adv yet.
+#define PRESENCE_REPROBE_OUT_MS  30000
 #define PRESENCE_TICK_MS       1000
 
 #define PRESENCE_NVS_NS    "presence"
@@ -269,7 +274,28 @@ static void presence_tick_cb(void *arg)
             dd_event_record(DD_EV_IN, DD_SRC_BLE_AUTO, s_presence[i].addr, 0, NULL);
             s_presence[i].ack_event = true;
         }
-        if (!s_presence[i].present) continue;
+
+        // OUT-state re-probe: keep poking the bonded peer every
+        // PRESENCE_REPROBE_OUT_MS to catch silent returns. Without this,
+        // a phone that goes through a present→absent→present cycle while
+        // locked + idle would never come back to present (passive scan
+        // alone misses it). On probe success, presence_seen_addr flips
+        // present=true and the catch-up code above fires IN next tick.
+        // No OUT event is emitted from this branch — present was already
+        // false, so there's nothing to "leave" from.
+        if (!s_presence[i].present) {
+            if (s_presence[i].probing) continue;
+            if (dd_ble_pairing_active()) continue;
+            int64_t since_probe = (now - s_presence[i].last_probe_us) / 1000;
+            if (s_presence[i].last_probe_us != 0 &&
+                since_probe < PRESENCE_REPROBE_OUT_MS) continue;
+            ESP_LOGI(TAG, "presence re-probe (OUT-state) %02x:%02x:%02x:%02x:%02x:%02x",
+                     s_presence[i].addr[0], s_presence[i].addr[1],
+                     s_presence[i].addr[2], s_presence[i].addr[3],
+                     s_presence[i].addr[4], s_presence[i].addr[5]);
+            presence_probe_start(i);
+            continue;
+        }
         int64_t since_ms = (now - s_presence[i].last_seen_us) / 1000;
 
         // Active probe before falling off the cliff. Fire when stale crosses
@@ -539,6 +565,55 @@ static int count_bonds(void)
     return n;
 }
 
+// Pre-allocate a presence slot for every bonded peer. Without this, the slot
+// is only created when scan first sees an adv from that peer — but iPhones
+// locked + idle can stay BLE-silent for minutes (Find My can throttle to <1
+// packet per 30s), so on a fresh boot we'd never enter the probe loop and
+// would never detect the phone at all. Pre-allocating means the tick will
+// see slots in present=false state and run the OUT-state re-probe, which
+// reliably wakes locked iPhones via active connect.
+static void presence_preallocate_bonded(void)
+{
+    ble_addr_t peers[BOND_MAX_LIST];
+    int n = 0;
+    if (ble_store_util_bonded_peers(peers, &n, BOND_MAX_LIST) != 0) return;
+    for (int i = 0; i < n && i < PRESENCE_MAX; i++) {
+        // Skip if a slot already holds this addr (re-init or duplicate bond).
+        bool already = false;
+        for (int j = 0; j < PRESENCE_MAX; j++) {
+            if (s_presence[j].used &&
+                memcmp(s_presence[j].addr, peers[i].val, 6) == 0) {
+                already = true;
+                break;
+            }
+        }
+        if (already) continue;
+
+        // Find first free slot.
+        int free_idx = -1;
+        for (int j = 0; j < PRESENCE_MAX; j++) {
+            if (!s_presence[j].used) { free_idx = j; break; }
+        }
+        if (free_idx < 0) {
+            ESP_LOGW(TAG, "presence slots full while pre-allocating bonds");
+            break;
+        }
+        s_presence[free_idx].used = true;
+        memcpy(s_presence[free_idx].addr, peers[i].val, 6);
+        s_presence[free_idx].present = false;
+        s_presence[free_idx].ack_event = false;
+        s_presence[free_idx].probing = false;
+        s_presence[free_idx].probe_handle = 0xFFFF;
+        s_presence[free_idx].last_probe_us = 0;
+        s_presence[free_idx].last_seen_us = 0;
+        ESP_LOGI(TAG, "presence slot %d pre-allocated for bond %02x:%02x:%02x:%02x:%02x:%02x (addr_type=%d)",
+                 free_idx,
+                 peers[i].val[0], peers[i].val[1], peers[i].val[2],
+                 peers[i].val[3], peers[i].val[4], peers[i].val[5],
+                 peers[i].type);
+    }
+}
+
 static bool should_be_strict(void)
 {
     // Strict (whitelist-only) when not in pairing window AND have bonds.
@@ -723,9 +798,11 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
         ESP_LOGI(TAG, "encryption change handle=%d status=%d",
                  event->enc_change.conn_handle, event->enc_change.status);
         if (event->enc_change.status == 0) {
-            // Successful pairing closes the window automatically. The IN
-            // event will arrive shortly via the scanner once it sees the
-            // newly-bonded iPhone's adv (we don't synthesize one here).
+            // Successful pairing closes the window automatically. Pre-allocate
+            // a presence slot for this brand-new bond so the OUT-state
+            // re-probe loop will start exercising it immediately, instead of
+            // waiting for the iPhone to send an unsolicited adv.
+            presence_preallocate_bonded();
             dd_ble_pairing_cancel();
             schedule_adv_restart(100);
         }
@@ -787,6 +864,13 @@ static void on_sync(void)
     ble_hs_id_copy_addr(s_own_addr_type, addr, NULL);
     ESP_LOGI(TAG, "own BLE addr (type=%d): %02x:%02x:%02x:%02x:%02x:%02x",
              s_own_addr_type, addr[5], addr[4], addr[3], addr[2], addr[1], addr[0]);
+
+    // Pre-populate presence slots for every existing bond. Without this the
+    // tick has nothing to drive probes off of until scan happens to receive
+    // an unsolicited adv from the peer — which iPhones locked + idle can
+    // skip for minutes. With pre-allocated slots, the OUT-state re-probe
+    // below kicks in immediately at boot and reliably detects locked phones.
+    presence_preallocate_bonded();
 
     start_advertising();
     start_scanning();
@@ -1061,6 +1145,17 @@ esp_err_t dd_ble_bond_revoke(const uint8_t addr[6])
     }
     ESP_LOGI(TAG, "bond revoked: %02x:%02x:%02x:%02x:%02x:%02x (type=%d)",
              addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], matched.type);
+
+    // Free the presence slot for this addr — the peer is no longer ours, so
+    // we shouldn't keep probing it. Without this the OUT-state re-probe
+    // would hammer connection requests at a peer whose IRK we no longer hold.
+    for (int i = 0; i < PRESENCE_MAX; i++) {
+        if (s_presence[i].used && memcmp(s_presence[i].addr, addr, 6) == 0) {
+            memset(&s_presence[i], 0, sizeof(s_presence[i]));
+            ESP_LOGI(TAG, "presence slot %d freed (bond revoked)", i);
+            break;
+        }
+    }
 
     // Restart adv (will drop strict-filter mode if this was the last bond).
     s_advertising = false;
