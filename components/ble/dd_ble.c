@@ -174,6 +174,35 @@ static void presence_seen_addr(const uint8_t addr[6])
 static void start_scanning(void);
 static void schedule_scan_restart(int delay_ms);
 
+// Relax connection params on a held geofence link.
+//
+// NimBLE defaults give us BLE_GAP_INITIAL_SUPERVISION_TIMEOUT = 0x100 = 2.56s,
+// which iOS routinely exceeds when locked + idle (it can go silent on a held
+// L2CAP link for 5-10s easily). The result was: probe succeeded → connection
+// up → iOS slept past supervision → controller dropped → DISCONNECT → OUT
+// timer ran → false OUT after 60s of failed wake-probes, even though the
+// iPhone never left the room.
+//
+// Long supervision (32s = max per spec) + slave latency (peer skips intervals)
+// + slow conn interval (1s) keeps the link alive across iOS deep sleep at
+// negligible power cost on both sides. iOS may counter-propose tighter values
+// — we log the result via BLE_GAP_EVENT_CONN_UPDATE.
+static void relax_conn_params(uint16_t conn_handle)
+{
+    struct ble_gap_upd_params p = {
+        .itvl_min            = 800,    //  1000 ms (1.25 ms units)
+        .itvl_max            = 1600,   //  2000 ms
+        .latency             = 4,      //  peer may skip 4 intervals
+        .supervision_timeout = 3200,   // 32000 ms (10 ms units, spec max)
+        .min_ce_len          = 0,
+        .max_ce_len          = 0,
+    };
+    int rc = ble_gap_update_params(conn_handle, &p);
+    if (rc != 0 && rc != BLE_HS_EALREADY) {
+        ESP_LOGW(TAG, "relax_conn_params handle=%d rc=%d", conn_handle, rc);
+    }
+}
+
 static int probe_event_cb(struct ble_gap_event *event, void *arg)
 {
     intptr_t slot_idx = (intptr_t)arg;
@@ -193,6 +222,9 @@ static int probe_event_cb(struct ble_gap_event *event, void *arg)
             // start the OUT timer. Routing through presence_seen_addr
             // flips present=true and fires IN if not already.
             presence_seen_addr(s->addr);
+            // Slow + tolerant conn params so iOS deep sleep doesn't drop us
+            // (default 2.56s supervision is way too tight).
+            relax_conn_params(event->connect.conn_handle);
             // Restart scanner — we want to keep seeing other peers' adverts
             // while this connection sits idle.
             schedule_scan_restart(50);
@@ -216,6 +248,20 @@ static int probe_event_cb(struct ble_gap_event *event, void *arg)
             // PRESENCE_TIMEOUT_MS.
             s->last_seen_us = esp_timer_get_time();
             schedule_scan_restart(50);
+        }
+        return 0;
+
+    case BLE_GAP_EVENT_CONN_UPDATE:
+        if (event->conn_update.status == 0) {
+            struct ble_gap_conn_desc d;
+            if (ble_gap_conn_find(event->conn_update.conn_handle, &d) == 0) {
+                ESP_LOGI(TAG, "probe-conn updated handle=%d itvl=%d latency=%d timeout=%d",
+                         event->conn_update.conn_handle, d.conn_itvl,
+                         d.conn_latency, d.supervision_timeout);
+            }
+        } else {
+            ESP_LOGW(TAG, "probe-conn update failed handle=%d status=%d",
+                     event->conn_update.conn_handle, event->conn_update.status);
         }
         return 0;
 
@@ -768,6 +814,13 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
                         memcmp(s_presence[i].addr, desc.peer_id_addr.val, 6) == 0) {
                         s_presence[i].connected = true;
                         ESP_LOGI(TAG, "geofence: bonded peer slot %d connected (HID-side)", i);
+                        // Same supervision/conn-itvl relaxation as the probe
+                        // path: iOS' default for HID is ~6s supervision which
+                        // is still tight enough that locked-iPhone deep sleep
+                        // can drop the link. Asking for 32s here costs nothing
+                        // — iOS may counter-propose, but our request strictly
+                        // widens the safe envelope.
+                        relax_conn_params(event->connect.conn_handle);
                         break;
                     }
                 }
@@ -805,6 +858,20 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_ADV_COMPLETE:
         ESP_LOGI(TAG, "adv complete reason=%d", event->adv_complete.reason);
         schedule_adv_restart(50);
+        return 0;
+
+    case BLE_GAP_EVENT_CONN_UPDATE:
+        if (event->conn_update.status == 0) {
+            struct ble_gap_conn_desc d;
+            if (ble_gap_conn_find(event->conn_update.conn_handle, &d) == 0) {
+                ESP_LOGI(TAG, "HID-conn updated handle=%d itvl=%d latency=%d timeout=%d",
+                         event->conn_update.conn_handle, d.conn_itvl,
+                         d.conn_latency, d.supervision_timeout);
+            }
+        } else {
+            ESP_LOGW(TAG, "HID-conn update failed handle=%d status=%d",
+                     event->conn_update.conn_handle, event->conn_update.status);
+        }
         return 0;
 
     case BLE_GAP_EVENT_SUBSCRIBE:
