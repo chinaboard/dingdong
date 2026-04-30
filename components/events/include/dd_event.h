@@ -35,6 +35,13 @@ esp_err_t dd_event_record(dd_event_type_t type, dd_event_source_t src,
 const char *dd_event_type_str(dd_event_type_t t);
 const char *dd_event_source_str(dd_event_source_t s);
 
+// Find the most recent event type for a given peer addr. Returns ESP_OK and
+// fills *out_type if found, ESP_ERR_NOT_FOUND if no events for that peer.
+// Used at boot to decide whether to emit a synthetic OUT (closing a stale
+// IN-without-OUT) before normal detection re-fires IN.
+esp_err_t dd_event_last_for_peer(const uint8_t peer_addr[6],
+                                  dd_event_type_t *out_type);
+
 #ifdef __cplusplus
 }
 #endif
