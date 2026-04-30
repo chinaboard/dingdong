@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [esp32c6, esp32c3]
+        board: [supermini-c6, supermini-c3]
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -41,39 +41,49 @@ jobs:
           VER=$(git describe --tags --dirty --always | sed 's/^v//')
           echo "FULL_VER=$VER" >> "$GITHUB_ENV"
           echo "version=$VER"   >> "$GITHUB_OUTPUT"
-          echo "Building $VER for ${{ matrix.target }}"
+          echo "Building $VER for ${{ matrix.board }}"
+
+      # Read board defaults the same way the local Makefile does so CI and
+      # dev builds agree byte-for-byte. Each board file sets TARGET / LED_*.
+      - id: board
+        run: |
+          # Strip Makefile syntax to plain shell exports.
+          sed 's/?=/=/' boards/${{ matrix.board }}.mk > /tmp/board.env
+          set -a; . /tmp/board.env; set +a
+          echo "IDF_TARGET=esp32$TARGET"   >> "$GITHUB_ENV"
+          echo "LED_ENABLE=$LED_ENABLE"     >> "$GITHUB_ENV"
+          echo "LED_KIND=${LED_KIND:-1}"   >> "$GITHUB_ENV"
+          echo "LED_GPIO=${LED_GPIO:-8}"   >> "$GITHUB_ENV"
+          echo "LED_BRIGHTNESS=${LED_BRIGHTNESS:-10}" >> "$GITHUB_ENV"
 
       # Reuse the exact docker invocation from the local Makefile so CI
-      # builds are bit-for-bit comparable with developer builds. CMake's
-      # `git describe` runs inside the container against the mounted .git/.
-      # safe.directory needed because container runs as a different uid than
-      # the file owner on the GH runner. IDF_TARGET selects which sdkconfig
-      # overlay (sdkconfig.defaults.${{ matrix.target }}) to layer on top.
-      # Build dir is per-target so the matrix jobs don't fight each other.
+      # builds are bit-for-bit comparable with developer builds. Build dir
+      # is per-target so the matrix jobs don't fight each other.
       - name: Build firmware
         run: |
           docker run --rm -v "$PWD:/project" -w /project \
-            -e IDF_TARGET=${{ matrix.target }} \
-            -e EXTRA_CFLAGS='-DDD_TZ="CST-8" -DDD_LED_ENABLE=1 -DDD_LED_GPIO=8 -DDD_LED_BRIGHTNESS=10' \
+            -e IDF_TARGET=$IDF_TARGET \
+            -e EXTRA_CFLAGS="-DDD_TZ=\"CST-8\" -DDD_LED_ENABLE=$LED_ENABLE -DDD_LED_KIND=$LED_KIND -DDD_LED_GPIO=$LED_GPIO -DDD_LED_BRIGHTNESS=$LED_BRIGHTNESS" \
             espressif/idf:v6.0.1 \
-            bash -c "git config --global --add safe.directory /project && idf.py -B build-${{ matrix.target }} -DSDKCONFIG=sdkconfig.${{ matrix.target }} reconfigure build"
+            bash -c "git config --global --add safe.directory /project && idf.py -B build-$IDF_TARGET -DSDKCONFIG=sdkconfig.$IDF_TARGET reconfigure build"
 
       # Stage everything a fresh device needs to come up. The merged
       # `dingdong-merged.bin` is the easiest path for end users (single
       # esptool write_flash 0x0); the individual files are kept for anyone
       # using espflash with --bootloader / --partition-table. Filenames
-      # carry the chip target so a multi-target release doesn't collide.
+      # carry the board name so a multi-board release doesn't collide.
       - name: Stage release assets
         run: |
-          B=build-${{ matrix.target }}
+          B=build-$IDF_TARGET
+          BOARD=${{ matrix.board }}
           mkdir -p release
-          cp $B/dingdong.bin                          "release/dingdong-${{ matrix.target }}-${FULL_VER}.bin"
-          cp $B/bootloader/bootloader.bin             "release/bootloader-${{ matrix.target }}.bin"
-          cp $B/partition_table/partition-table.bin   "release/partition-table-${{ matrix.target }}.bin"
-          cp $B/ota_data_initial.bin                  "release/ota_data_initial-${{ matrix.target }}.bin"
+          cp $B/dingdong.bin                          "release/dingdong-${BOARD}-${FULL_VER}.bin"
+          cp $B/bootloader/bootloader.bin             "release/bootloader-${BOARD}.bin"
+          cp $B/partition_table/partition-table.bin   "release/partition-table-${BOARD}.bin"
+          cp $B/ota_data_initial.bin                  "release/ota_data_initial-${BOARD}.bin"
           docker run --rm -v "$PWD:/project" -w /project \
             espressif/idf:v6.0.1 \
-            python -m esptool --chip ${{ matrix.target }} merge-bin -o "release/dingdong-merged-${{ matrix.target }}-${FULL_VER}.bin" \
+            python -m esptool --chip $IDF_TARGET merge-bin -o "release/dingdong-merged-${BOARD}-${FULL_VER}.bin" \
               0x0      $B/bootloader/bootloader.bin \
               0x8000   $B/partition_table/partition-table.bin \
               0x10000  $B/ota_data_initial.bin \
@@ -82,7 +92,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.target }}-${{ env.FULL_VER }}
+          name: firmware-${{ matrix.board }}-${{ env.FULL_VER }}
           path: release/
           retention-days: 90
 

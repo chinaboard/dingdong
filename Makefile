@@ -4,15 +4,29 @@
 # pass through USB. Flash/monitor run on the host with espflash, which talks
 # to /dev/cu.usbmodem101 directly.
 #
-# Pick chip target with TARGET=c3 or TARGET=c6 (default c6). Each target has
-# its own build directory (build-esp32cN/) so you can keep both binaries
-# around and switch with no fullclean dance.
+# Pick a board with BOARD=<name>; the file boards/<name>.mk supplies all
+# board-specific defaults (TARGET, LED_KIND, LED_GPIO…). Each board lives in
+# its own per-target build directory (build-esp32cN/) so you can keep both
+# binaries around and switch with no fullclean dance.
+#
+# Built-in boards:
+#   BOARD=supermini-c6   ESP32-C6 SuperMini, WS2812 on GPIO8 (default)
+#   BOARD=supermini-c3   ESP32-C3 SuperMini, plain blue LED on GPIO8
+#   BOARD=generic        no LED, c6 target — override TARGET=... yourself
+# Add a new board by dropping a new boards/<name>.mk; no Makefile edit needed.
+#
+# CLI overrides still work:  make build BOARD=supermini-c3 LED_BRIGHTNESS=30
 
 PORT       ?= /dev/cu.usbmodem101
 BAUD       ?= 921600
 IDF_IMAGE  ?= espressif/idf:v6.0.1
 PROJECT    ?= dingdong
-TARGET     ?= c6
+BOARD      ?= supermini-c6
+
+# Board overlay sets TARGET / LED_* defaults. Use ?= inside so explicit CLI
+# values (which Make sets before this include runs) win.
+include boards/$(BOARD).mk
+
 IDF_TARGET := esp32$(TARGET)
 BUILD_DIR  := build-$(IDF_TARGET)
 # Per-target sdkconfig (the generated one with all expanded settings).
@@ -24,20 +38,13 @@ SDKCONFIG  := sdkconfig.$(IDF_TARGET)
 #   make build TZ=EST5EDT      # US East
 TZ         ?= CST-8
 
-# Build-time LED config. SuperMini ships with a WS2812 on GPIO8 (most revs).
-#   LED_ENABLE=0    skip LED code entirely (boards without an addressable LED)
-#   LED_GPIO=15     override pin if your board differs
-#   LED_BRIGHTNESS  0..255 — keep it dim, the on-board pixel is harsh up close
-LED_ENABLE     ?= 1
-LED_GPIO       ?= 8
-LED_BRIGHTNESS ?= 10
-
 # IDF picks up EXTRA_CFLAGS from the env at build time. Inner values use
 # escaped double quotes so the whole string can be wrapped in shell double
 # quotes when passed to `docker run -e` below — single-quoting inside
 # single-quoting doesn't compose.
 EXTRA_CFLAGS := -DDD_TZ=\"$(TZ)\" \
                 -DDD_LED_ENABLE=$(LED_ENABLE) \
+                -DDD_LED_KIND=$(LED_KIND) \
                 -DDD_LED_GPIO=$(LED_GPIO) \
                 -DDD_LED_BRIGHTNESS=$(LED_BRIGHTNESS)
 

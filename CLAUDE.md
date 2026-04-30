@@ -13,31 +13,34 @@ Single binary produced: `build/dingdong.elf`. Target chip is selected at build t
 Build runs **inside Docker** (macOS Docker can't pass USB through); flash/monitor run on the **host** with `espflash`. Both halves are wrapped by `Makefile`:
 
 ```bash
-make build                          # idf.py build inside espressif/idf:v6.0.1 (default TARGET=c6)
-make build TARGET=c3                # build for ESP32-C3 instead
-make flash                          # espflash on host → /dev/cu.usbmodem101
-make monitor                        # espflash monitor (interactive)
+make build                                # default board (BOARD=supermini-c6)
+make build BOARD=supermini-c3             # ESP32-C3 SuperMini (plain blue LED)
+make flash BOARD=supermini-c3 PORT=...    # flashes the C3 binary
+make monitor                              # espflash monitor (interactive)
 make flash-monitor
-make menuconfig                     # interactive sdkconfig (TTY container)
-make erase                          # full chip erase via espflash
-make size                           # idf.py size
-make shell                          # bash inside the IDF container
-make clean                          # idf.py fullclean
-make fullclean                      # rm build/ sdkconfig managed_components/ dependencies.lock
+make menuconfig                           # interactive sdkconfig (TTY container)
+make erase                                # full chip erase via espflash
+make size                                 # idf.py size
+make shell                                # bash inside the IDF container
+make clean                                # idf.py fullclean (current board only)
+make fullclean                            # rm all build-*/ + sdkconfigs
 ```
 
-Override port: `make flash PORT=/dev/cu.xxx` (default `/dev/cu.usbmodem101`, baud `921600`). Headless serial-only sniff (when monitor's TTY requirement is in the way): `python3 /tmp/dd_log.py` (pyserial; opens /dev/cu.usbmodem101 @ 115200 raw).
+Override port: `make flash PORT=/dev/cu.xxx` (default `/dev/cu.usbmodem101`, baud `921600`). Headless serial-only sniff: `python3 /tmp/dd_log.py` (pyserial; opens /dev/cu.usbmodem101 @ 115200 raw).
 
-**Switching target chip**: `make fullclean && make build TARGET=c3` (or `c6`). The per-target overlay lives in `sdkconfig.defaults.esp32cN`; the common `sdkconfig.defaults` doesn't pin a chip. Resulting image sizes (as of v0.7.0):
+### Board concept
 
-| Chip   | Image     | Slot %  | Heap free at idle |
-|--------|-----------|---------|-------------------|
-| ESP32-C6 | 1.39 MB | 90.8%   | ~218 KB           |
-| ESP32-C3 | 1.21 MB | 77.0%   | ~84 KB (tighter)  |
+`BOARD=<name>` selects a preset that bundles **chip target + LED config + GPIO assignments**. Each board lives in `boards/<name>.mk`; the file just `?=`-sets `TARGET`, `LED_KIND`, `LED_GPIO`, `LED_BRIGHTNESS`, etc. Adding a new board is a one-file drop — no Makefile edits.
 
-C3's smaller image is largely the BLE 5.0 controller stack (no extended-adv / 5.3 features). C3's smaller heap budget — the chip has 400 KB SRAM vs C6's 512 KB — leaves ~84 KB free after WiFi+BLE+HTTP init in SoftAP mode. Adding many workers + concurrent OTA + heavy event traffic could push close to the 20 KB heap-watchdog warn threshold; keep an eye on `/api/system/status` `heap_free` in production deployments.
+| Board name      | Chip      | LED          | Image (v0.7+) |
+|-----------------|-----------|--------------|---------------|
+| supermini-c6 (default) | ESP32-C6 | WS2812 RGB on GPIO8 | 1.39 MB / 90.8% |
+| supermini-c3    | ESP32-C3  | Plain blue LED on GPIO8 (LEDC PWM) | 1.21 MB / 77.0% |
+| generic         | ESP32-C6  | None (`LED_ENABLE=0`) — use as a starting point for unknown hardware | varies |
 
-There is no host toolchain assumption beyond Docker + `espflash` (`brew install espflash`). There is no test suite, no linter, and no CI configuration in-tree.
+Per-board build artifacts go to `build-esp32cN/` and the generated sdkconfig to `sdkconfig.esp32cN`, so multiple boards can coexist on disk and switching between them needs no `make fullclean`. Heap budget after init varies by chip: C6 ≈ 218 KB free, C3 ≈ 84 KB free (smaller SRAM); in production deployments watch `/api/system/status` `heap_free` for trends, the watchdog warns at 20 KB and force-restarts at 6 KB.
+
+There is no host toolchain assumption beyond Docker + `espflash` (`brew install espflash`). There is no test suite, no linter; CI is in `.github/workflows/build.yml` and runs the same matrix of boards as the local Makefile recognises.
 
 ## Build-time configuration
 
@@ -45,10 +48,11 @@ A few knobs are baked at compile time and propagated through `EXTRA_CFLAGS` from
 
 ```bash
 make build TZ=JST-9                   # POSIX TZ string baked into dd_time_init as fallback
-make build LED_GPIO=15                # WS2812 pin (default 8 for SuperMini)
-make build LED_BRIGHTNESS=1           # 0..255, sets per-channel ceiling for status LED
-make build LED_ENABLE=0               # skip LED code entirely (board has no addressable pixel)
+make build LED_BRIGHTNESS=1           # 0..255, override the per-board ceiling
+make build BOARD=supermini-c3 LED_GPIO=10   # any board variable can be CLI-overridden
 ```
+
+Per-board defaults for `LED_ENABLE` / `LED_KIND` / `LED_GPIO` / `LED_BRIGHTNESS` come from `boards/<name>.mk` — see the BOARD table earlier. CLI overrides win because the board files use `?=`.
 
 Each macro has a `#ifndef … #define` fallback in the consuming `.c`, so a bare `idf.py build` (no Makefile) still compiles with sensible defaults. **TZ is build-time only** — it sets the device's `setenv("TZ", ...)` for `localtime_r` calls (CSV export columns, `/api/today` / `/api/calendar` day boundaries). The Web UI displays times in the browser's timezone via `new Date(ts*1000).getHours()`, so the device-side TZ only matters for export and bucketing, not for what the dashboard renders.
 

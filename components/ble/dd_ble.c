@@ -60,9 +60,19 @@ static esp_timer_handle_t s_scan_restart_timer = NULL;
 #define PRESENCE_TIMEOUT_DEFAULT_S 60
 #define PRESENCE_TIMEOUT_MIN_S     30
 #define PRESENCE_TIMEOUT_MAX_S     600
-#define PRESENCE_PROBE_AFTER_MS 20000   // start probing at 20s stale
-#define PRESENCE_PROBE_TIMEOUT_MS 3000  // per-attempt connect timeout
-#define PRESENCE_PROBE_COOLDOWN_MS 20000  // gap between probe attempts
+// Probe schedule for catching iPhones before OUT. iOS BLE peripherals run
+// connection intervals of 1-2.5s when locked + idle, so the full connect
+// handshake can take 5-7s. PROBE_TIMEOUT used to be 3s — which is *less*
+// than one full handshake worst-case — so probes failed even when the
+// iPhone was a metre away. Numbers chosen to fit ~3 probe attempts inside
+// the default 60s timeout window:
+//   probe at 15s stale (PROBE_AFTER) → 6s timeout
+//   if it failed, retry at ~31s (cooldown 10s after the previous probe ended)
+//   if that failed, retry at ~47s
+//   OUT at 60s if all three failed
+#define PRESENCE_PROBE_AFTER_MS   15000
+#define PRESENCE_PROBE_TIMEOUT_MS  6000
+#define PRESENCE_PROBE_COOLDOWN_MS 10000
 #define PRESENCE_TICK_MS       1000
 
 #define PRESENCE_NVS_NS    "presence"
