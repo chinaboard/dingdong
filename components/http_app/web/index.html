@@ -279,6 +279,12 @@ details[open]>summary::before{content:'▾ '}
 .wrow:last-child{border-bottom:0}
 .wrow-meta{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--t3);margin-top:6px;font-variant-numeric:tabular-nums;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .wrow-meta .sep{color:var(--border-strong)}
+
+/* Setup wizard WiFi scan: clickable chips of nearby SSIDs. Click fills the
+   SSID input — way more reliable than hand-typing for users with long /
+   special-char SSIDs. */
+.ssidchip{display:inline-block;padding:3px 8px;margin:3px 4px 0 0;background:var(--bg);border:1px solid var(--border-strong);border-radius:var(--r);font-size:11px;color:var(--t1);cursor:pointer;font-family:ui-monospace,Menlo,monospace;transition:border-color .12s,background .12s}
+.ssidchip:hover{border-color:var(--accent);background:var(--surface-2)}
 </style>
 </head>
 <body>
@@ -328,6 +334,10 @@ const I18N = {
     'setup.desc':'Set the admin password and WiFi credentials. The device will reboot into normal mode.',
     'setup.admin':'Admin password', 'setup.admin_hint':'(≥ 8 chars)',
     'setup.wifi_ssid':'WiFi SSID', 'setup.wifi_pass':'WiFi password',
+    'setup.wifi_scan':'Re-scan',
+    'setup.wifi_scanning':'Scanning…',
+    'setup.wifi_scan_fail':'Scan failed — retry or type SSID manually',
+    'setup.wifi_no_aps':'No networks found nearby',
     'setup.save':'Save and restart',
     'setup.saved':'Saved', 'setup.saved_desc':'Device restarting, please wait…',
     'setup.mdns_hint':'After restart, open <a id=mdnsLink>http://{0}.local</a> from any device on the same WiFi.',
@@ -488,6 +498,10 @@ const I18N = {
     'setup.desc':'设置管理员密码和 WiFi。完成后设备会重启进入正常模式。',
     'setup.admin':'管理员密码', 'setup.admin_hint':'(至少 8 位)',
     'setup.wifi_ssid':'WiFi 名称', 'setup.wifi_pass':'WiFi 密码',
+    'setup.wifi_scan':'重新扫描',
+    'setup.wifi_scanning':'扫描中…',
+    'setup.wifi_scan_fail':'扫描失败 — 重试或手动输入 SSID',
+    'setup.wifi_no_aps':'附近未发现 WiFi',
     'setup.save':'保存并重启',
     'setup.saved':'已保存', 'setup.saved_desc':'设备重启中,请稍候…',
     'setup.mdns_hint':'重启完成后,在同一 WiFi 下访问 <a id=mdnsLink>http://{0}.local</a> 即可',
@@ -790,7 +804,13 @@ function renderSetup(){
         <label>${t('setup.admin')} <span class=mono style='color:var(--t3)'>${t('setup.admin_hint')}</span>
           <input class=input name=admin_password type=password minlength=8 required></label>
         <label>${t('setup.wifi_ssid')}
-          <input class=input name=wifi_ssid required></label>
+          <div class=row style='gap:6px'>
+            <input class=input name=wifi_ssid id=ssidInput list=ssidList required style='flex:1'>
+            <datalist id=ssidList></datalist>
+            <button type=button class='btn ghost sm' id=scanB title='${t('setup.wifi_scan')}'>↻</button>
+          </div>
+          <div id=scanResults class='t-mute' style='font-size:11px;margin-top:6px'></div>
+        </label>
         <label>${t('setup.wifi_pass')}
           <input class=input name=wifi_password type=password></label>
         <button class='btn primary submit'>${t('setup.save')}</button>
@@ -805,6 +825,39 @@ function renderSetup(){
       </div>
       <div class='mono t-mute' id=restoreMsg style='margin-top:8px;font-size:11px;text-align:center;min-height:14px'></div>
     </div>`;
+
+  // Auto-scan on open + manual rescan via the ↻ button.
+  const doScan=async()=>{
+    const btn=$('scanB'),box=$('scanResults'),dl=$('ssidList');
+    btn.disabled=true; const old=btn.textContent; btn.textContent='…';
+    box.textContent=t('setup.wifi_scanning');
+    try{
+      const r=await fetch('/api/wifi/scan');
+      if(!r.ok){box.textContent=t('setup.wifi_scan_fail');return;}
+      const list=await r.json();
+      // Dedupe + sort by RSSI desc (strongest first).
+      const seen=new Set(); const aps=[];
+      for(const a of list){
+        if(!a.ssid || seen.has(a.ssid))continue;
+        seen.add(a.ssid); aps.push(a);
+      }
+      aps.sort((a,b)=>(b.rssi||-999)-(a.rssi||-999));
+      dl.innerHTML=aps.map(a=>`<option value='${escAttr(a.ssid)}'>`).join('');
+      if(aps.length===0){box.textContent=t('setup.wifi_no_aps');return;}
+      // Render clickable chips so user can tap to fill instead of typing.
+      box.innerHTML=aps.slice(0,12).map(a=>{
+        const lock=a.secure?' <span class=t-mute>·</span> 🔒':'';
+        return `<span class=ssidchip data-ssid='${escAttr(a.ssid)}'>${escAttr(a.ssid)} <span class=t-mute>${a.rssi}dBm${lock}</span></span>`;
+      }).join('');
+      box.querySelectorAll('.ssidchip').forEach(c=>c.onclick=()=>{
+        $('ssidInput').value=c.dataset.ssid;
+        $('ssidInput').focus();
+      });
+    }catch(_){box.textContent=t('setup.wifi_scan_fail');}
+    finally{btn.disabled=false; btn.textContent=old;}
+  };
+  $('scanB').onclick=doScan;
+  doScan();  // run once on open
   $('setupF').onsubmit=async e=>{e.preventDefault();
     const fd=Object.fromEntries(new FormData(e.target));
     const r=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(fd)});
