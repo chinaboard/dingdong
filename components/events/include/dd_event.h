@@ -35,12 +35,17 @@ esp_err_t dd_event_record(dd_event_type_t type, dd_event_source_t src,
 const char *dd_event_type_str(dd_event_type_t t);
 const char *dd_event_source_str(dd_event_source_t s);
 
-// Find the most recent event type for a given peer addr. Returns ESP_OK and
-// fills *out_type if found, ESP_ERR_NOT_FOUND if no events for that peer.
-// Used at boot to decide whether to emit a synthetic OUT (closing a stale
-// IN-without-OUT) before normal detection re-fires IN.
-esp_err_t dd_event_last_for_peer(const uint8_t peer_addr[6],
-                                  dd_event_type_t *out_type);
+// Bulk lookup: for each peer in `peers[]` (caller fills .addr, function fills
+// .has_event and .type), find the most recent event matching that addr in a
+// SINGLE pass over events.jsonl. Used at boot — N bonds with M events runs
+// in O(M) instead of O(N*M). `n` clamped at 8 (max bonds).
+typedef struct {
+    uint8_t addr[6];
+    bool    has_event;
+    dd_event_type_t type;
+} dd_event_peer_latest_t;
+
+esp_err_t dd_event_latest_for_peers(dd_event_peer_latest_t *peers, int n);
 
 #ifdef __cplusplus
 }

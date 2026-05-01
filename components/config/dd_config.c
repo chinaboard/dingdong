@@ -305,7 +305,13 @@ esp_err_t dd_config_set_device_name(const char *name)
 #define KEY_BOOT_COUNT     "boot_count"
 #define KEY_TOTAL_UPTIME   "total_up_s"
 #define KEY_LAST_UPTIME    "last_up_s"
+#define KEY_RESTART_CAUSE  "rst_cause"
 
+
+// Cached at boot from NVS so multiple consumers (status, diag) see a stable
+// value for this boot's "what triggered the previous shutdown" answer.
+static dd_restart_cause_t s_last_cause       = DD_RESTART_UNKNOWN;
+static bool               s_last_cause_init  = false;
 
 esp_err_t dd_metrics_load(dd_metrics_t *out)
 {
@@ -372,4 +378,47 @@ esp_err_t dd_metrics_reset(void)
     nvs_close(h);
     ESP_LOGW(TAG, "metrics reset");
     return err;
+}
+
+void dd_metrics_set_restart_cause(dd_restart_cause_t c)
+{
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_set_u8(h, KEY_RESTART_CAUSE, (uint8_t)c);
+    nvs_commit(h);
+    nvs_close(h);
+}
+
+void dd_metrics_consume_restart_cause(void)
+{
+    if (s_last_cause_init) return;
+    s_last_cause_init = true;
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return;
+    uint8_t v = 0;
+    if (nvs_get_u8(h, KEY_RESTART_CAUSE, &v) == ESP_OK) {
+        s_last_cause = (dd_restart_cause_t)v;
+    }
+    nvs_erase_key(h, KEY_RESTART_CAUSE);
+    nvs_commit(h);
+    nvs_close(h);
+    ESP_LOGI(TAG, "last restart cause: %s", dd_restart_cause_str(s_last_cause));
+}
+
+dd_restart_cause_t dd_metrics_get_last_cause(void)
+{
+    return s_last_cause;
+}
+
+const char *dd_restart_cause_str(dd_restart_cause_t c)
+{
+    switch (c) {
+    case DD_RESTART_UNKNOWN:       return "unknown";
+    case DD_RESTART_OTA:           return "ota";
+    case DD_RESTART_ADMIN:         return "admin";
+    case DD_RESTART_FACTORY:       return "factory";
+    case DD_RESTART_SETUP:         return "setup";
+    case DD_RESTART_HEAP_CRITICAL: return "heap_critical";
+    default:                       return "?";
+    }
 }

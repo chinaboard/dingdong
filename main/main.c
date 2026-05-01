@@ -65,6 +65,7 @@ static void heap_check_cb(void *arg)
     size_t free_heap = esp_get_free_heap_size();
     if (free_heap < HEAP_CRITICAL_LIMIT) {
         ESP_LOGE(TAG, "HEAP CRITICAL: %u bytes free, restarting!", (unsigned)free_heap);
+        dd_metrics_set_restart_cause(DD_RESTART_HEAP_CRITICAL);
         vTaskDelay(pdMS_TO_TICKS(500));
         esp_restart();
     }
@@ -159,6 +160,7 @@ static void boot_button_task(void *arg)
                 ESP_LOGE(TAG, "BOOT long-press → FACTORY RESET");
                 dd_config_factory_reset();
                 dd_storage_event_wipe();
+                dd_metrics_set_restart_cause(DD_RESTART_FACTORY);
                 vTaskDelay(pdMS_TO_TICKS(500));
                 esp_restart();
             }
@@ -202,6 +204,7 @@ void app_main(void)
     ESP_ERROR_CHECK(dd_config_init());
     ESP_ERROR_CHECK(dd_session_init());
     dd_metrics_record_boot();
+    dd_metrics_consume_restart_cause();
     ESP_ERROR_CHECK(dd_time_init());
     ESP_ERROR_CHECK(dd_storage_init());
     ESP_ERROR_CHECK(dd_event_init());

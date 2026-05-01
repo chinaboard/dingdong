@@ -275,6 +275,7 @@ esp_err_t restart_post(httpd_req_t *req)
 {
     if (require_auth(req) != ESP_OK) return ESP_OK;
 
+    dd_metrics_set_restart_cause(DD_RESTART_ADMIN);
     reply_text(req, "200 OK", "restarting in 1s");
     schedule_restart(1000);
     return ESP_OK;
@@ -300,6 +301,7 @@ esp_err_t factory_reset_post(httpd_req_t *req)
     dd_config_factory_reset();
     dd_storage_event_wipe();
 
+    dd_metrics_set_restart_cause(DD_RESTART_FACTORY);
     reply_text(req, "200 OK", "factory reset, restarting");
     schedule_restart(1500);
     return ESP_OK;
@@ -638,6 +640,7 @@ esp_err_t restore_post(httpd_req_t *req)
     }
 
     cJSON_Delete(j);
+    dd_metrics_set_restart_cause(DD_RESTART_ADMIN);
     reply_text(req, "200 OK", "restored, restarting");
     schedule_restart(1500);
     return ESP_OK;
@@ -721,6 +724,8 @@ esp_err_t diag_get(httpd_req_t *req)
     }
 
     cJSON_AddStringToObject(j, "reset_reason", reset_reason_str(esp_reset_reason()));
+    cJSON_AddStringToObject(j, "restart_cause",
+                             dd_restart_cause_str(dd_metrics_get_last_cause()));
 
     dd_metrics_t m;
     if (dd_metrics_load(&m) == ESP_OK) {
@@ -887,6 +892,7 @@ esp_err_t ota_post(httpd_req_t *req)
     }
 
     ESP_LOGW(TAG, "OTA complete (%d bytes), rebooting in 2s", received);
+    dd_metrics_set_restart_cause(DD_RESTART_OTA);
     reply_text(req, "200 OK", "ok, rebooting into new image");
     schedule_restart(2000);
     return ESP_OK;

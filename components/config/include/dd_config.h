@@ -61,6 +61,26 @@ esp_err_t dd_metrics_record_boot(void);   // increments boot_count, returns new
 esp_err_t dd_metrics_save_uptime(uint32_t seconds);  // total += seconds, last = seconds
 esp_err_t dd_metrics_reset(void);          // zeros boot_count + total/last uptime
 
+// Restart-cause hint persisted across reboots so we can distinguish OTA /
+// admin-triggered / factory / setup / heap-critical / unknown (= crash if
+// esp_reset_reason() is sw without us setting anything). Each callsite that
+// triggers esp_restart() should call dd_metrics_set_restart_cause() right
+// before. At boot, dd_metrics_consume_restart_cause() reads + erases the
+// NVS entry so the value reflects the IMMEDIATE prior shutdown only.
+typedef enum {
+    DD_RESTART_UNKNOWN       = 0,   // power-on, crash, or pre-set-cause boot
+    DD_RESTART_OTA           = 1,
+    DD_RESTART_ADMIN         = 2,   // /api/system/restart
+    DD_RESTART_FACTORY       = 3,   // /api/system/factory_reset OR boot button long-press
+    DD_RESTART_SETUP         = 4,   // first-run /api/setup
+    DD_RESTART_HEAP_CRITICAL = 5,   // heap watchdog forced restart
+} dd_restart_cause_t;
+
+void dd_metrics_set_restart_cause(dd_restart_cause_t c);
+void dd_metrics_consume_restart_cause(void);  // call once at boot
+dd_restart_cause_t dd_metrics_get_last_cause(void);
+const char *dd_restart_cause_str(dd_restart_cause_t c);
+
 #ifdef __cplusplus
 }
 #endif

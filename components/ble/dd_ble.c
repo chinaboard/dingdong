@@ -682,6 +682,15 @@ static void presence_preallocate_bonded(void)
     ble_addr_t peers[BOND_MAX_LIST];
     int n = 0;
     if (ble_store_util_bonded_peers(peers, &n, BOND_MAX_LIST) != 0) return;
+    if (n == 0) return;
+
+    // Bulk-lookup latest event per bond in a SINGLE pass over events.jsonl
+    // (vs N passes if we did per-peer queries). At 90-day retention this can
+    // save several hundred ms of boot time.
+    dd_event_peer_latest_t latest[BOND_MAX_LIST] = {0};
+    for (int i = 0; i < n; i++) memcpy(latest[i].addr, peers[i].val, 6);
+    dd_event_latest_for_peers(latest, n);
+
     for (int i = 0; i < n && i < PRESENCE_MAX; i++) {
         // Skip if a slot already holds this addr (re-init or duplicate bond).
         bool already = false;
@@ -718,9 +727,7 @@ static void presence_preallocate_bonded(void)
         // stream IN/OUT-paired. The OUT fires from flush_pending_boot_out()
         // once NTP is synced — either inline before the next real IN, or
         // from the periodic tick if peer never returns.
-        dd_event_type_t last_type;
-        bool was_in = (dd_event_last_for_peer(peers[i].val, &last_type) == ESP_OK
-                       && last_type == DD_EV_IN);
+        bool was_in = latest[i].has_event && latest[i].type == DD_EV_IN;
         s_presence[free_idx].pending_boot_out = was_in;
 
         ESP_LOGI(TAG, "presence slot %d pre-allocated for bond %02x:%02x:%02x:%02x:%02x:%02x"

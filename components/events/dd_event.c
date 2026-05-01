@@ -81,72 +81,91 @@ const char *dd_event_source_str(dd_event_source_t s)
     }
 }
 
-// Find latest event for a peer by walking events.jsonl. "Latest" prefers
-// (ts, mono_us) order; falls back to file-order when ts is missing/zero
-// (early events recorded before NTP sync end up with ts=0).
+// Bulk: scan events.jsonl ONCE, per line look up addr in peers[] and update
+// each peer's latest. "Latest" prefers (ts, mono_us); falls back to file
+// order when ts is missing/zero (early events recorded before NTP sync).
 typedef struct {
-    char     addr_str[18];
     int64_t  best_ts;
     int64_t  best_mono;
     int      best_idx;
-    int      cur_idx;
     bool     found;
     dd_event_type_t type;
-} last_evt_ctx_t;
+    char     addr_str[18];   // pre-formatted for fast strcmp
+} peer_track_t;
 
-static esp_err_t last_for_peer_cb(const char *line, void *arg)
+typedef struct {
+    peer_track_t *track;
+    int           n;
+    int           cur_idx;
+} bulk_ctx_t;
+
+static esp_err_t bulk_iter_cb(const char *line, void *arg)
 {
-    last_evt_ctx_t *c = arg;
+    bulk_ctx_t *c = arg;
     c->cur_idx++;
+
     cJSON *j = cJSON_Parse(line);
     if (!j) return ESP_OK;
 
     const cJSON *peer  = cJSON_GetObjectItem(j, "peer");
     const cJSON *typej = cJSON_GetObjectItem(j, "type");
-    const cJSON *tsj   = cJSON_GetObjectItem(j, "ts");
-    const cJSON *monoj = cJSON_GetObjectItem(j, "mono_us");
-
-    if (!cJSON_IsString(peer) || !cJSON_IsString(typej) ||
-        strcmp(peer->valuestring, c->addr_str) != 0) {
+    if (!cJSON_IsString(peer) || !cJSON_IsString(typej)) {
         cJSON_Delete(j); return ESP_OK;
     }
 
+    // Find which peer this is — early-out via memcmp on pre-formatted strs.
+    int hit = -1;
+    for (int i = 0; i < c->n; i++) {
+        if (strcmp(c->track[i].addr_str, peer->valuestring) == 0) {
+            hit = i; break;
+        }
+    }
+    if (hit < 0) { cJSON_Delete(j); return ESP_OK; }
+
+    const cJSON *tsj   = cJSON_GetObjectItem(j, "ts");
+    const cJSON *monoj = cJSON_GetObjectItem(j, "mono_us");
     int64_t ts   = cJSON_IsNumber(tsj)   ? (int64_t)tsj->valuedouble   : 0;
     int64_t mono = cJSON_IsNumber(monoj) ? (int64_t)monoj->valuedouble : 0;
 
+    peer_track_t *t = &c->track[hit];
     bool newer = false;
-    if (!c->found) {
+    if (!t->found) {
         newer = true;
-    } else if (ts > 0 && c->best_ts > 0) {
-        newer = (ts > c->best_ts) ||
-                (ts == c->best_ts && mono > c->best_mono);
+    } else if (ts > 0 && t->best_ts > 0) {
+        newer = (ts > t->best_ts) || (ts == t->best_ts && mono > t->best_mono);
     } else {
-        newer = c->cur_idx > c->best_idx;
+        newer = c->cur_idx > t->best_idx;
     }
-
     if (newer) {
-        c->found = true;
-        c->best_ts   = ts;
-        c->best_mono = mono;
-        c->best_idx  = c->cur_idx;
-        c->type = (strcmp(typej->valuestring, "in") == 0) ? DD_EV_IN : DD_EV_OUT;
+        t->found    = true;
+        t->best_ts  = ts;
+        t->best_mono= mono;
+        t->best_idx = c->cur_idx;
+        t->type     = (strcmp(typej->valuestring, "in") == 0) ? DD_EV_IN : DD_EV_OUT;
     }
     cJSON_Delete(j);
     return ESP_OK;
 }
 
-esp_err_t dd_event_last_for_peer(const uint8_t peer_addr[6],
-                                  dd_event_type_t *out_type)
+esp_err_t dd_event_latest_for_peers(dd_event_peer_latest_t *peers, int n)
 {
-    if (!peer_addr || !out_type) return ESP_ERR_INVALID_ARG;
-    last_evt_ctx_t c = { .cur_idx = 0, .best_idx = -1, .found = false };
-    snprintf(c.addr_str, sizeof(c.addr_str),
-             "%02x:%02x:%02x:%02x:%02x:%02x",
-             peer_addr[0], peer_addr[1], peer_addr[2],
-             peer_addr[3], peer_addr[4], peer_addr[5]);
-    dd_storage_event_iter(last_for_peer_cb, &c);
-    if (!c.found) return ESP_ERR_NOT_FOUND;
-    *out_type = c.type;
+    if (!peers || n <= 0) return ESP_ERR_INVALID_ARG;
+    if (n > 8) n = 8;
+
+    peer_track_t track[8] = {0};
+    for (int i = 0; i < n; i++) {
+        snprintf(track[i].addr_str, sizeof(track[i].addr_str),
+                 "%02x:%02x:%02x:%02x:%02x:%02x",
+                 peers[i].addr[0], peers[i].addr[1], peers[i].addr[2],
+                 peers[i].addr[3], peers[i].addr[4], peers[i].addr[5]);
+    }
+    bulk_ctx_t ctx = { .track = track, .n = n, .cur_idx = 0 };
+    dd_storage_event_iter(bulk_iter_cb, &ctx);
+
+    for (int i = 0; i < n; i++) {
+        peers[i].has_event = track[i].found;
+        peers[i].type      = track[i].type;
+    }
     return ESP_OK;
 }
 

@@ -254,6 +254,7 @@ esp_err_t setup_post(httpd_req_t *req)
     }
     cJSON_Delete(j);
 
+    dd_metrics_set_restart_cause(DD_RESTART_SETUP);
     reply_text(req, "200 OK", "ok, restarting in 2s");
     schedule_restart(2000);
     return ESP_OK;
