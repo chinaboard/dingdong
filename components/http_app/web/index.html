@@ -429,7 +429,6 @@ const I18N = {
     'system.ntp_label':'NTP server',
     'system.ntp_synced':'Synced {0}.',
     'system.ntp_unsynced':'Not synced yet — check server reachability.',
-    'system.ntp_note':'* Hostname or IP. Must respond to NTP queries on UDP/123. Common picks: pool.ntp.org · time.cloudflare.com · time.apple.com · ntp.aliyun.com',
     'system.reset_stats':'Reset boot/uptime stats',
     'system.reset_stats_confirm':'Reset boot count + total uptime to zero?',
     'system.sync_ntp':'Sync NTP',
@@ -593,7 +592,6 @@ const I18N = {
     'system.ntp_label':'NTP 服务器',
     'system.ntp_synced':'已同步 ({0})。',
     'system.ntp_unsynced':'尚未同步 — 检查服务器是否可达。',
-    'system.ntp_note':'* 域名或 IP。需要响应 UDP/123 上的 NTP 查询。常用:pool.ntp.org · time.cloudflare.com · time.apple.com · ntp.aliyun.com',
     'system.reset_stats':'清零启动/运行统计',
     'system.reset_stats_confirm':'把启动次数 + 累计运行时间清零?',
     'system.sync_ntp':'同步时间',
@@ -1280,22 +1278,21 @@ function renderSystem(){
       <div class=card>
         <div class=ctitle>${t('system.ntp_label')}</div>
         <div class=row>
-          <input class=input id=ntpServer list=ntpServers placeholder='ntp.aliyun.com' style='flex:1'>
-          <datalist id=ntpServers>
-            <option value=ntp.aliyun.com>
-            <option value=ntp.tencent.com>
-            <option value=cn.pool.ntp.org>
-            <option value=pool.ntp.org>
-            <option value=time.cloudflare.com>
-            <option value=time.google.com>
-            <option value=time.apple.com>
-            <option value=time.windows.com>
-          </datalist>
+          <input class=input id=ntpServer placeholder='ntp.aliyun.com' style='flex:1'>
           <button class='btn ghost' id=ntpResync title='${t('system.sync_ntp')}'>↻</button>
           <button class=btn id=ntpSaveB>${t('common.save')}</button>
         </div>
+        <div style='margin-top:6px' id=ntpChips>
+          <span class=ssidchip data-ntp='ntp.aliyun.com'>ntp.aliyun.com</span>
+          <span class=ssidchip data-ntp='ntp.tencent.com'>ntp.tencent.com</span>
+          <span class=ssidchip data-ntp='cn.pool.ntp.org'>cn.pool.ntp.org</span>
+          <span class=ssidchip data-ntp='pool.ntp.org'>pool.ntp.org</span>
+          <span class=ssidchip data-ntp='time.cloudflare.com'>time.cloudflare.com</span>
+          <span class=ssidchip data-ntp='time.google.com'>time.google.com</span>
+          <span class=ssidchip data-ntp='time.apple.com'>time.apple.com</span>
+          <span class=ssidchip data-ntp='time.windows.com'>time.windows.com</span>
+        </div>
         <div class=note id=ntpStatus></div>
-        <div class=note>${t('system.ntp_note')}</div>
       </div>
       <div class=card>
         <div class=ctitle>${t('system.backup_label')}</div>
@@ -1380,6 +1377,10 @@ function renderSystem(){
   };
   $('ntpResync').onclick=async e=>{await fetch('/api/system/time_resync',{method:'POST'});
     e.target.textContent='✓';setTimeout(()=>e.target.textContent='↻',1500);};
+  document.querySelectorAll('#ntpChips .ssidchip').forEach(c=>c.onclick=()=>{
+    $('ntpServer').value=c.dataset.ntp;
+    $('ntpServer').focus();
+  });
   $('metricsResetB').onclick=async e=>{
     if(!confirm(t('system.reset_stats_confirm')))return;
     const r=await fetch('/api/system/metrics_reset',{method:'POST'});
