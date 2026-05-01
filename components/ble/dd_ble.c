@@ -95,7 +95,6 @@ typedef struct {
     bool     connected;         // we hold a live connection to this peer (probe-initiated or HID-accepted)
     uint16_t probe_handle;      // conn handle for in-flight probe (0xFFFF if none)
     bool     used;
-    bool     pending_boot_out;  // events log says peer was IN at last boot — owe a synthetic OUT before any new IN
 } presence_slot_t;
 
 static presence_slot_t s_presence[PRESENCE_MAX];
@@ -116,23 +115,6 @@ static bool     s_filter_strict = false;
 static int gap_event_cb(struct ble_gap_event *event, void *arg);
 
 // ---------- presence: scan-based bonded-peer detection ----------
-
-// Emit a synthetic OUT to close the previous boot's stale IN (last event for
-// this peer was IN, no OUT recorded — happens when device reboots while peer
-// was present). Must be called BEFORE any IN for this peer in this boot, so
-// the events log stays IN/OUT-paired. No-op if NTP not yet synced (we'll get
-// called again from later ticks); no-op if not pending.
-static void flush_pending_boot_out(int slot_idx)
-{
-    presence_slot_t *s = &s_presence[slot_idx];
-    if (!s->pending_boot_out) return;
-    if (dd_time_now_unix() <= 0) return;  // wait for NTP
-
-    ESP_LOGI(TAG, "boot resume: emitting synthetic OUT to close prior IN for %02x:%02x:%02x:%02x:%02x:%02x",
-             s->addr[0], s->addr[1], s->addr[2], s->addr[3], s->addr[4], s->addr[5]);
-    dd_event_record(DD_EV_OUT, DD_SRC_BLE_AUTO, s->addr, 0, "boot resume");
-    s->pending_boot_out = false;
-}
 
 static void presence_seen_addr(const uint8_t addr[6])
 {
@@ -166,9 +148,6 @@ static void presence_seen_addr(const uint8_t addr[6])
     s_presence[slot_idx].last_seen_us = esp_timer_get_time();
     bool first_seen = !s_presence[slot_idx].present;
     s_presence[slot_idx].present = true;
-
-    // Close any prior-boot IN with synthetic OUT before recording fresh IN.
-    flush_pending_boot_out(slot_idx);
 
     // Only emit IN once we have wall-clock time. Otherwise the event would
     // land in storage with ts=0 and disappear into 1970 in the UI. The tick
@@ -345,11 +324,6 @@ static void presence_tick_cb(void *arg)
     int64_t now = esp_timer_get_time();
     for (int i = 0; i < PRESENCE_MAX; i++) {
         if (!s_presence[i].used) continue;
-
-        // Pending boot-resume OUT: close prior IN even if peer never returns.
-        // Must run BEFORE the catch-up IN below so synthetic OUT precedes the
-        // first real IN of this boot.
-        flush_pending_boot_out(i);
 
         // Geofence: if we hold a live BLE connection to this peer, presence
         // is definitive. Refresh last_seen continuously so when the link
@@ -722,21 +696,29 @@ static void presence_preallocate_bonded(void)
         s_presence[free_idx].last_probe_us = 0;
         s_presence[free_idx].last_seen_us = 0;
 
-        // Boot resume: if events log says peer's most recent event was IN
-        // (no OUT recorded since), we owe a synthetic OUT to keep the event
-        // stream IN/OUT-paired. The OUT fires from flush_pending_boot_out()
-        // once NTP is synced — either inline before the next real IN, or
-        // from the periodic tick if peer never returns.
+        // Boot-resume: if events log says peer was IN at last shutdown (no
+        // matching OUT since), restore the slot's in-RAM state to "still in,
+        // already acknowledged". This way:
+        //   - peer still in proximity → next scan refreshes last_seen, NO new
+        //     event fires (continuous presence, no IN spam, no OUT spam)
+        //   - peer actually gone → no scan/probe success, last_seen ages →
+        //     after PRESENCE_TIMEOUT_MS the OUT path fires a real OUT (since
+        //     ack_event=true), correctly closing the previous IN
+        // last_seen primed to NOW so the OUT timer counts from boot, not from
+        // 1970, giving the upcoming probe a fair chance.
         bool was_in = latest[i].has_event && latest[i].type == DD_EV_IN;
-        s_presence[free_idx].pending_boot_out = was_in;
-
+        if (was_in) {
+            s_presence[free_idx].present      = true;
+            s_presence[free_idx].ack_event    = true;
+            s_presence[free_idx].last_seen_us = esp_timer_get_time();
+        }
         ESP_LOGI(TAG, "presence slot %d pre-allocated for bond %02x:%02x:%02x:%02x:%02x:%02x"
                       " (last_event=%s%s)",
                  free_idx,
                  peers[i].val[0], peers[i].val[1], peers[i].val[2],
                  peers[i].val[3], peers[i].val[4], peers[i].val[5],
                  was_in ? "in" : "out/none",
-                 was_in ? " — synthetic OUT pending" : "");
+                 was_in ? " — resumed as present" : "");
     }
 }
 
