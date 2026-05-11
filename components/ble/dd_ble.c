@@ -276,7 +276,7 @@ static void presence_probe_start(int slot_idx)
     if (s->probing) return;
     if (dd_ble_pairing_active()) return;  // don't fight the pairing flow
 
-    ble_addr_t peer = { .type = BLE_OWN_ADDR_PUBLIC };
+    ble_addr_t peer = { .type = BLE_ADDR_RANDOM_ID };
     memcpy(peer.val, s->addr, 6);
 
     // Bonds are stored with the type NimBLE captured during pairing —
@@ -292,6 +292,20 @@ static void presence_probe_start(int slot_idx)
             }
         }
     }
+
+    // CRITICAL: ble_gap_connect with peer.type = BLE_ADDR_PUBLIC (0) or
+    // BLE_ADDR_RANDOM (1) tells the controller "match this exact address
+    // on air" — no resolving-list lookup. iPhones never advertise their
+    // identity address; they always rotate through RPAs encrypted with
+    // their IRK. So a connect targeting the bare identity address times
+    // out 100% of the time (status=13 / BLE_HS_ETIMEOUT in our logs).
+    //
+    // The controller engages the resolving list (matches RPAs against
+    // bonded IRKs back to the identity) only for the _ID variants. Promote
+    // PUBLIC → PUBLIC_ID, RANDOM → RANDOM_ID so the probe can actually
+    // reach a locked iPhone whose RPA has rotated since pairing.
+    if (peer.type == BLE_ADDR_PUBLIC)      peer.type = BLE_ADDR_PUBLIC_ID;
+    else if (peer.type == BLE_ADDR_RANDOM) peer.type = BLE_ADDR_RANDOM_ID;
 
     // ble_gap_connect cannot run while ble_gap_ext_disc is active —
     // they share the controller's scanning resource. Stop the scanner
