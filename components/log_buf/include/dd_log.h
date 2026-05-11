@@ -11,7 +11,7 @@ extern "C" {
 // Hooks ESP_LOG output into a ring buffer (forwarding to UART/USB-JTAG too).
 // Call once, very early in app_main — before other components log anything
 // you might want to keep. Capacity below is the on-device retention.
-#define DD_LOG_BUF_BYTES 4096
+#define DD_LOG_BUF_BYTES 65536
 
 esp_err_t dd_log_init(void);
 
