@@ -19,6 +19,26 @@
 
 // ---------- raw event iteration ----------
 
+// Count-only callback used to compute tail offset when a worker filter is
+// active (the cached storage count is across all workers, so we need a
+// real walk to know how many match).
+typedef struct {
+    uint16_t worker_id;
+    int      count;
+} count_ctx_t;
+
+static esp_err_t count_iter_cb(const char *line, void *arg)
+{
+    count_ctx_t *c = arg;
+    cJSON *j = cJSON_Parse(line);
+    if (!j) return ESP_OK;
+    const cJSON *wid_j = cJSON_GetObjectItem(j, "worker_id");
+    int wid = cJSON_IsNumber(wid_j) ? (int)wid_j->valuedouble : 0;
+    if (wid == c->worker_id) c->count++;
+    cJSON_Delete(j);
+    return ESP_OK;
+}
+
 typedef struct {
     httpd_req_t *req;
     bool        first;
@@ -73,11 +93,13 @@ esp_err_t events_get(httpd_req_t *req)
     int limit  = 200;
     int64_t from_ts = 0, to_ts = 0;
     uint16_t worker_id = 0;
+    bool offset_set = false;
     if (httpd_req_get_url_query_str(req, qbuf, sizeof(qbuf)) == ESP_OK) {
         char val[24];
         if (httpd_query_key_value(qbuf, "offset", val, sizeof(val)) == ESP_OK) {
             offset = atoi(val);
             if (offset < 0) offset = 0;
+            offset_set = true;
         }
         if (httpd_query_key_value(qbuf, "limit", val, sizeof(val)) == ESP_OK) {
             limit = atoi(val);
@@ -99,6 +121,24 @@ esp_err_t events_get(httpd_req_t *req)
                 limit   = 0;
             }
         }
+    }
+
+    // Tail mode: when no time-range filter and no explicit offset, treat
+    // ?limit=N as "the most recent N" instead of "the oldest N". Without
+    // this the events tab silently drops the freshest entries once the
+    // log grows past `limit` — exactly opposite of what the UI wants.
+    // For worker_id-filtered queries we have to walk the file once to
+    // count matches; otherwise the cached storage count is enough.
+    if (limit > 0 && !offset_set && from_ts == 0 && to_ts == 0) {
+        int matching;
+        if (worker_id == 0) {
+            matching = (int)dd_storage_event_count();
+        } else {
+            count_ctx_t cc = { .worker_id = worker_id, .count = 0 };
+            dd_storage_event_iter(count_iter_cb, &cc);
+            matching = cc.count;
+        }
+        if (matching > limit) offset = matching - limit;
     }
 
     httpd_resp_set_type(req, "application/json");
