@@ -66,7 +66,7 @@ static esp_timer_handle_t s_scan_restart_timer = NULL;
 // than one full handshake worst-case. 10s gives the controller two full
 // connection intervals to wake + finish handshake even from deep sleep.
 //   probe at 15s stale (PROBE_AFTER) → 10s timeout
-//   if it failed, retry at ~35s (cooldown 10s after the previous probe ended)
+//   if it failed, retry at +10s (cooldown measured from probe END, not start)
 //   OUT at 60s if both failed
 #define PRESENCE_PROBE_AFTER_MS   15000
 #define PRESENCE_PROBE_TIMEOUT_MS 10000
@@ -87,8 +87,9 @@ static int s_presence_timeout_ms = PRESENCE_TIMEOUT_DEFAULT_S * 1000;
 
 typedef struct {
     uint8_t  addr[6];
+    uint8_t  addr_type;         // bond store type (PUBLIC=0 / RANDOM=1); promoted to _ID at probe time
     int64_t  last_seen_us;
-    int64_t  last_probe_us;     // when last probe attempt started
+    int64_t  last_probe_us;     // when last probe attempt ENDED (success/fail/abort) — drives cooldown
     bool     present;           // currently in proximity (last_seen recent)
     bool     ack_event;         // IN event has been recorded for this proximity window
     bool     probing;           // a connect-probe is in flight
@@ -116,6 +117,24 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg);
 
 // ---------- presence: scan-based bonded-peer detection ----------
 
+// Look up a bonded peer by its 6-byte address. Returns true and writes the
+// full ble_addr_t (type + bytes) into *out if found. Used by slot-creation
+// paths to capture the original PUBLIC/RANDOM type at the time the slot
+// is allocated, so probe_start doesn't need to re-query the bond store.
+static bool bond_addr_lookup(const uint8_t addr[6], ble_addr_t *out)
+{
+    ble_addr_t peers[BOND_MAX_LIST];
+    int n = 0;
+    if (ble_store_util_bonded_peers(peers, &n, BOND_MAX_LIST) != 0) return false;
+    for (int i = 0; i < n; i++) {
+        if (memcmp(peers[i].val, addr, 6) == 0) {
+            if (out) *out = peers[i];
+            return true;
+        }
+    }
+    return false;
+}
+
 static void presence_seen_addr(const uint8_t addr[6])
 {
     int free_idx = -1;
@@ -134,10 +153,15 @@ static void presence_seen_addr(const uint8_t addr[6])
             ESP_LOGW(TAG, "presence slots full");
             return;
         }
-        if (!dd_ble_bond_exists(addr)) return;
+        // Capture the bond's address type so probe_start doesn't need to
+        // re-query the store on every probe attempt. bond_addr_lookup also
+        // gates slot creation: non-bonded peers we ignore.
+        ble_addr_t bonded;
+        if (!bond_addr_lookup(addr, &bonded)) return;
         slot_idx = free_idx;
         s_presence[slot_idx].used = true;
         memcpy(s_presence[slot_idx].addr, addr, 6);
+        s_presence[slot_idx].addr_type = bonded.type;
         s_presence[slot_idx].present = false;
         s_presence[slot_idx].ack_event = false;
         s_presence[slot_idx].probing = false;
@@ -231,6 +255,7 @@ static int probe_event_cb(struct ble_gap_event *event, void *arg)
         } else {
             ESP_LOGI(TAG, "probe FAIL slot=%d status=%d", (int)slot_idx, event->connect.status);
             s->probing = false;
+            s->last_probe_us = esp_timer_get_time();  // probe ended → cooldown starts now
             schedule_scan_restart(50);  // probe over, scanner can resume
         }
         return 0;
@@ -247,6 +272,7 @@ static int probe_event_cb(struct ble_gap_event *event, void *arg)
             // re-establish quickly. If it's truly gone, OUT fires after
             // PRESENCE_TIMEOUT_MS.
             s->last_seen_us = esp_timer_get_time();
+            s->last_probe_us = s->last_seen_us;  // link-drop ends the probe lifecycle
             schedule_scan_restart(50);
         }
         return 0;
@@ -276,51 +302,34 @@ static void presence_probe_start(int slot_idx)
     if (s->probing) return;
     if (dd_ble_pairing_active()) return;  // don't fight the pairing flow
 
-    ble_addr_t peer = { .type = BLE_ADDR_RANDOM_ID };
+    // Slot's addr_type was captured from the bond store at slot-creation
+    // time (presence_seen_addr or init pre-allocation). PUBLIC (0) and
+    // RANDOM (1) tell the controller "match this exact address on air" —
+    // no resolving-list lookup. iPhones never advertise their identity
+    // address; they always rotate through RPAs encrypted with their IRK.
+    // Promote to the _ID variants so the controller engages its resolving
+    // list and matches incoming RPAs back to the bonded identity.
+    ble_addr_t peer = { .type = s->addr_type };
     memcpy(peer.val, s->addr, 6);
-
-    // Bonds are stored with the type NimBLE captured during pairing —
-    // for an iPhone bond that's typically random-static (0x01), not
-    // public. Look it up so ble_gap_connect picks the right addr type.
-    ble_addr_t peers[BOND_MAX_LIST];
-    int n = 0;
-    if (ble_store_util_bonded_peers(peers, &n, BOND_MAX_LIST) == 0) {
-        for (int i = 0; i < n; i++) {
-            if (memcmp(peers[i].val, s->addr, 6) == 0) {
-                peer = peers[i];
-                break;
-            }
-        }
-    }
-
-    // CRITICAL: ble_gap_connect with peer.type = BLE_ADDR_PUBLIC (0) or
-    // BLE_ADDR_RANDOM (1) tells the controller "match this exact address
-    // on air" — no resolving-list lookup. iPhones never advertise their
-    // identity address; they always rotate through RPAs encrypted with
-    // their IRK. So a connect targeting the bare identity address times
-    // out 100% of the time (status=13 / BLE_HS_ETIMEOUT in our logs).
-    //
-    // The controller engages the resolving list (matches RPAs against
-    // bonded IRKs back to the identity) only for the _ID variants. Promote
-    // PUBLIC → PUBLIC_ID, RANDOM → RANDOM_ID so the probe can actually
-    // reach a locked iPhone whose RPA has rotated since pairing.
     if (peer.type == BLE_ADDR_PUBLIC)      peer.type = BLE_ADDR_PUBLIC_ID;
     else if (peer.type == BLE_ADDR_RANDOM) peer.type = BLE_ADDR_RANDOM_ID;
 
     // ble_gap_connect cannot run while ble_gap_ext_disc is active —
     // they share the controller's scanning resource. Stop the scanner
-    // first; it'll be restarted from probe_event_cb's CONNECT-fail or
-    // DISCONNECT path (whichever ends the probe). Without this stop the
-    // connect call returns BLE_HS_EBUSY (rc=15) and the probe never
-    // actually attempts anything.
+    // first; without this stop the connect call returns BLE_HS_EBUSY
+    // and the probe never actually attempts anything. If disc_cancel
+    // itself errors (controller in some weird state), bail out: the
+    // subsequent connect will almost certainly fail with EBUSY too.
     int dc = ble_gap_disc_cancel();
     if (dc != 0 && dc != BLE_HS_EALREADY) {
-        ESP_LOGW(TAG, "probe slot=%d disc_cancel rc=%d", slot_idx, dc);
+        ESP_LOGW(TAG, "probe slot=%d disc_cancel rc=%d, abort", slot_idx, dc);
+        s->last_probe_us = esp_timer_get_time();  // count this against cooldown
+        schedule_scan_restart(50);
+        return;
     }
 
     s->probing = true;
     s->probe_handle = 0xFFFF;
-    s->last_probe_us = esp_timer_get_time();
 
     int rc = ble_gap_connect(s_own_addr_type, &peer,
                              PRESENCE_PROBE_TIMEOUT_MS, NULL,
@@ -329,6 +338,7 @@ static void presence_probe_start(int slot_idx)
              slot_idx, rc, peer.type);
     if (rc != 0) {
         s->probing = false;
+        s->last_probe_us = esp_timer_get_time();  // failed-to-start counts as ended
         schedule_scan_restart(50);  // restore scanner since probe didn't take
     }
 }
@@ -702,6 +712,7 @@ static void presence_preallocate_bonded(void)
         }
         s_presence[free_idx].used = true;
         memcpy(s_presence[free_idx].addr, peers[i].val, 6);
+        s_presence[free_idx].addr_type = peers[i].type;
         s_presence[free_idx].present = false;
         s_presence[free_idx].ack_event = false;
         s_presence[free_idx].probing = false;
