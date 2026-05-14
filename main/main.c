@@ -242,6 +242,19 @@ void app_main(void)
              dd_config_has_admin(), dd_config_has_wifi());
     ESP_LOGI(TAG, "==========================================");
 
+    // Schedule chassis safety nets FIRST, before any heavy init. OTA
+    // validation must fire from a timer so the bootloader rollback path
+    // can engage even if dd_ble_start / dd_wifi_start later in this
+    // function hangs. (Heap watchdog and BOOT-button rescue have the
+    // same requirement.) These used to live below all of dd_ble_start /
+    // dd_wifi_start / dd_http_start, but a long BLE init or a stuck
+    // WiFi connect could delay the validate timer past 60s and the
+    // rollback window would silently expire under the bad image.
+    schedule_ota_validation();
+    schedule_heap_watchdog();
+    schedule_retention();
+    xTaskCreate(boot_button_task, "boot_btn", 3072, NULL, 5, NULL);
+
 #ifndef DEBUG_WIFI_SSID
     ESP_ERROR_CHECK(dd_ble_start());
 #else
@@ -253,13 +266,6 @@ void app_main(void)
     // SNTP requires WiFi/lwip up. Always start; if STA isn't connected yet,
     // it'll keep retrying.
     dd_time_sntp_start();
-
-    // Now that everything's wired, schedule OTA validation. If anything
-    // panics in the next 60s the bootloader will revert to previous image.
-    schedule_ota_validation();
-    schedule_heap_watchdog();
-    schedule_retention();
-    xTaskCreate(boot_button_task, "boot_btn", 3072, NULL, 5, NULL);
 
     char ip[16];
     int tick = 0;
