@@ -811,7 +811,8 @@ esp_err_t diag_get(httpd_req_t *req)
         }
         it = esp_partition_next(it);
     }
-    if (it) esp_partition_iterator_release(it);
+    // esp_partition_next() frees the iterator when it returns NULL, so
+    // by here `it == NULL` and an explicit release would be redundant.
     cJSON_AddItemToObject(ota, "slots", slots);
     if (running) cJSON_AddStringToObject(ota, "running", running->label);
     if (next)    cJSON_AddStringToObject(ota, "next",    next->label);
