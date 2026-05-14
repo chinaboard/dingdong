@@ -274,6 +274,10 @@ details[open]>summary::before{content:'▾ '}
 .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;background:transparent;border:1px solid var(--border-strong);border-radius:var(--r);color:var(--t2);cursor:pointer;font-size:12px;padding:0}
 .iconbtn:hover{color:var(--t1);border-color:rgba(255,255,255,.18)}
 
+/* Boot-loop recovery banner. Pinned to top, hard to miss. */
+.recovery-banner{background:#5b1f1f;border:1px solid #c54040;color:#fee;padding:10px 14px;border-radius:var(--r);margin-bottom:14px;font-size:13px;line-height:1.5}
+.recovery-banner b{color:#fff}
+
 /* Worker row: name + category on top, meta + actions below (mobile-friendly). */
 .wrow{padding:10px 0;border-bottom:1px solid var(--border)}
 .wrow:last-child{border-bottom:0}
@@ -353,6 +357,9 @@ const I18N = {
     'login.btn':'Log in',
     'login.wrong':'Wrong password',
     'wizard.device_label':'Configuring device',
+
+    'recovery.banner_title':'BOOT-LOOP RECOVERY MODE',
+    'recovery.banner_body':'The previous image crashed {0} consecutive times before reaching the 60-second healthy mark. The firmware forced SoftAP recovery. Upload a working firmware via System → Firmware OTA below to recover.',
 
     'overview.title':'Overview',
     'overview.desc':"Device status and today's attendance.",
@@ -516,6 +523,9 @@ const I18N = {
     'login.btn':'登录',
     'login.wrong':'密码错误',
     'wizard.device_label':'当前设备',
+
+    'recovery.banner_title':'启动回环恢复模式',
+    'recovery.banner_body':'上一个固件镜像在到达 60 秒健康检查前已连续崩溃 {0} 次。固件已强制进入 SoftAP 恢复模式。请通过下面的 系统 → 固件 OTA 上传可工作的固件来恢复。',
 
     'overview.title':'总览',
     'overview.desc':'设备状态与今日考勤。',
@@ -792,10 +802,21 @@ function wizardDeviceBadge(){
   </div>`;
 }
 
+// Returns '' or the boot-loop recovery banner HTML.
+function recoveryBanner(){
+  if(!state.status?.recovery_mode) return '';
+  const n = state.status.boot_loop_count || '?';
+  return `<div class=recovery-banner>
+    <b>⚠ ${t('recovery.banner_title')}</b><br>
+    ${t('recovery.banner_body', n)}
+  </div>`;
+}
+
 function renderSetup(){
   const m=$('main');
   m.innerHTML=`
     ${wizardDeviceBadge()}
+    ${recoveryBanner()}
     <div class=ph><h1>${t('setup.title')}</h1><div class=desc>${t('setup.desc')}</div></div>
     <div class=card>
       <form class=form id=setupF>
@@ -884,6 +905,7 @@ function renderSetup(){
 function renderLogin(){
   $('main').innerHTML=`
     ${wizardDeviceBadge()}
+    ${recoveryBanner()}
     <div class=ph><h1>${t('login.title')}</h1><div class=desc>${t('login.desc')}</div></div>
     <div class=card>
       <form class=form id=loginF>
@@ -901,6 +923,7 @@ function renderLogin(){
 
 async function renderOverview(){
   $('main').innerHTML=`
+    ${recoveryBanner()}
     <div class=ph><h1>${t('overview.title')}</h1><div class=desc>${t('overview.desc')}</div></div>
     <div class=stats id=statsRow>
       <div class=stat><div class=k>${t('overview.stat_on_site')}</div><div class=v>—</div><div class=sub>—</div></div>
@@ -1223,6 +1246,7 @@ async function loadWorkers(){
 
 function renderSystem(){
   $('main').innerHTML=`
+    ${recoveryBanner()}
     <div class=ph><h1>${t('system.title')}</h1><div class=desc>${t('system.desc')}</div></div>
 
     <div class=section>${t('system.section_settings')}</div>

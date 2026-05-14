@@ -138,6 +138,8 @@ esp_err_t status_get(httpd_req_t *req)
 {
     cJSON *j = cJSON_CreateObject();
     cJSON_AddStringToObject(j, "mode", dd_boot_mode_str(dd_config_boot_mode()));
+    cJSON_AddBoolToObject(j, "recovery_mode", dd_metrics_in_recovery_mode());
+    cJSON_AddNumberToObject(j, "boot_loop_count", (double)dd_metrics_boot_loop_count());
     cJSON_AddStringToObject(j, "wifi", dd_wifi_state_str(dd_wifi_state()));
     char ip[16]; dd_wifi_get_ip(ip, sizeof(ip));
     cJSON_AddStringToObject(j, "ip", ip);

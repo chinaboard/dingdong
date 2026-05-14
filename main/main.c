@@ -26,9 +26,10 @@
 
 static const char *TAG = "dingdong";
 
-// After 60s of healthy uptime, mark current OTA image as valid so bootloader
-// won't roll back next boot. If we panic before this fires, the bootloader
-// reverts to the previous image automatically.
+// After 60s of healthy uptime: mark current OTA image as valid so the
+// bootloader won't roll back next boot, AND clear the boot-loop counter
+// so the next boot doesn't think we're crashing. Both are tied to the
+// same "we made it 60s without dying" criterion.
 static void ota_mark_valid_cb(void *arg)
 {
     const esp_partition_t *p = esp_ota_get_running_partition();
@@ -41,6 +42,7 @@ static void ota_mark_valid_cb(void *arg)
     } else {
         ESP_LOGI(TAG, "OTA: image '%s' state=%d (no action)", p->label, (int)state);
     }
+    dd_metrics_boot_loop_clear();
 }
 
 static void schedule_ota_validation(void)
@@ -205,6 +207,23 @@ void app_main(void)
     ESP_ERROR_CHECK(dd_session_init());
     dd_metrics_record_boot();
     dd_metrics_consume_restart_cause();
+
+    // Bump the boot-loop counter BEFORE bringing up anything that could
+    // crash. ota_mark_valid_cb() (60s) clears it. If we never make 60s
+    // (panic loop, watchdog, hang), the counter accumulates and the next
+    // wifi_start forces SoftAP recovery mode (SSID `dingdong-rec-XXXX`).
+    {
+        uint32_t bl = dd_metrics_boot_loop_inc();
+        if (bl >= DD_BOOT_LOOP_RECOVERY_THRESHOLD) {
+            ESP_LOGE(TAG, "*** BOOT-LOOP RECOVERY ARMED *** count=%u (≥%d)",
+                     (unsigned)bl, DD_BOOT_LOOP_RECOVERY_THRESHOLD);
+            dd_metrics_set_restart_cause(DD_RESTART_BOOT_LOOP);
+        } else if (bl > 1) {
+            ESP_LOGW(TAG, "boot-loop counter=%u (recovery at %d)",
+                     (unsigned)bl, DD_BOOT_LOOP_RECOVERY_THRESHOLD);
+        }
+    }
+
     ESP_ERROR_CHECK(dd_time_init());
     ESP_ERROR_CHECK(dd_storage_init());
     ESP_ERROR_CHECK(dd_event_init());

@@ -63,6 +63,23 @@ esp_err_t dd_metrics_reset(void);          // zeros boot_count + total/last upti
 
 // Restart-cause hint persisted across reboots so we can distinguish OTA /
 // admin-triggered / factory / setup / heap-critical / unknown (= crash if
+// ---------- boot-loop recovery ("unbrickable" guard) ----------
+//
+// Persisted counter incremented at app_main entry, cleared after the same
+// 60s window that marks the OTA image valid. If a freshly booted image
+// reaches DD_BOOT_LOOP_RECOVERY_THRESHOLD before clearing the counter,
+// the chassis forces SoftAP recovery mode (regardless of saved WiFi
+// creds) so the user can OTA a working image back without USB access.
+//
+// Triggered by anything that prevents reaching the 60s healthy mark:
+// panic loops, watchdog resets, hangs that prevent the OTA validate
+// timer from running, brownouts, etc. Reset by dd_metrics_boot_loop_clear().
+#define DD_BOOT_LOOP_RECOVERY_THRESHOLD 3
+uint32_t  dd_metrics_boot_loop_inc(void);   // bump + return new value
+uint32_t  dd_metrics_boot_loop_count(void); // peek current value (no mutation)
+void      dd_metrics_boot_loop_clear(void); // call once we know boot is healthy
+bool      dd_metrics_in_recovery_mode(void); // counter ≥ THRESHOLD
+
 // esp_reset_reason() is sw without us setting anything). Each callsite that
 // triggers esp_restart() should call dd_metrics_set_restart_cause() right
 // before. At boot, dd_metrics_consume_restart_cause() reads + erases the
@@ -74,6 +91,7 @@ typedef enum {
     DD_RESTART_FACTORY       = 3,   // /api/system/factory_reset OR boot button long-press
     DD_RESTART_SETUP         = 4,   // first-run /api/setup
     DD_RESTART_HEAP_CRITICAL = 5,   // heap watchdog forced restart
+    DD_RESTART_BOOT_LOOP     = 6,   // forced into recovery after N failed boots
 } dd_restart_cause_t;
 
 void dd_metrics_set_restart_cause(dd_restart_cause_t c);

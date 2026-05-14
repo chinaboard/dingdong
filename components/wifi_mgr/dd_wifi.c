@@ -161,14 +161,18 @@ static esp_err_t start_softap(void)
     // STA netif also created so esp_wifi_scan_start can run while AP is up.
     s_netif_sta = esp_netif_create_default_wifi_sta();
 
-    // Build per-device SSID `dingdong-setup-XXXX` from the BT MAC last 2
-    // bytes. Using BT MAC (not WiFi MAC) so the suffix matches the BLE
-    // device name `dingdong-XXXX` — one identifier per physical device.
+    // Build per-device SSID `dingdong-setup-XXXX` (or `dingdong-rec-XXXX`
+    // in recovery mode) from the BT MAC last 2 bytes. Using BT MAC (not
+    // WiFi MAC) so the suffix matches the BLE device name `dingdong-XXXX`
+    // — one identifier per physical device.
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_BT);
     char ssid[AP_SSID_MAX];
-    int slen = snprintf(ssid, sizeof(ssid), AP_SSID_PREFIX "%02X%02X",
-                        mac[4], mac[5]);
+    const char *prefix = dd_metrics_in_recovery_mode()
+        ? "dingdong-rec-"   // boot-loop recovery — visible at a glance
+        : AP_SSID_PREFIX;
+    int slen = snprintf(ssid, sizeof(ssid), "%s%02X%02X",
+                        prefix, mac[4], mac[5]);
 
     wifi_config_t cfg = {
         .ap = {
@@ -233,6 +237,14 @@ esp_err_t dd_wifi_start(void)
         WIFI_EVENT, ESP_EVENT_ANY_ID, on_wifi_event, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         IP_EVENT, IP_EVENT_STA_GOT_IP, on_wifi_event, NULL, NULL));
+
+    // Recovery mode forces SoftAP regardless of saved creds. See
+    // DD_BOOT_LOOP_RECOVERY_THRESHOLD in dd_config.h.
+    if (dd_metrics_in_recovery_mode()) {
+        ESP_LOGE(TAG, "BOOT-LOOP RECOVERY: %u consecutive failures → forced SoftAP",
+                 (unsigned)dd_metrics_boot_loop_count());
+        return start_softap();
+    }
 
     dd_boot_mode_t mode = dd_config_boot_mode();
     if (mode == DD_BOOT_NORMAL) {

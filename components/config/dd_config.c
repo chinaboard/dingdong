@@ -306,6 +306,7 @@ esp_err_t dd_config_set_device_name(const char *name)
 #define KEY_TOTAL_UPTIME   "total_up_s"
 #define KEY_LAST_UPTIME    "last_up_s"
 #define KEY_RESTART_CAUSE  "rst_cause"
+#define KEY_BOOT_LOOP      "boot_loop"
 
 
 // Cached at boot from NVS so multiple consumers (status, diag) see a stable
@@ -380,6 +381,51 @@ esp_err_t dd_metrics_reset(void)
     return err;
 }
 
+// ---------- boot-loop recovery ----------
+
+uint32_t dd_metrics_boot_loop_inc(void)
+{
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return 0;
+    uint32_t n = 0;
+    nvs_get_u32(h, KEY_BOOT_LOOP, &n);
+    n++;
+    nvs_set_u32(h, KEY_BOOT_LOOP, n);
+    nvs_commit(h);
+    nvs_close(h);
+    return n;
+}
+
+uint32_t dd_metrics_boot_loop_count(void)
+{
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READONLY, &h) != ESP_OK) return 0;
+    uint32_t n = 0;
+    nvs_get_u32(h, KEY_BOOT_LOOP, &n);
+    nvs_close(h);
+    return n;
+}
+
+void dd_metrics_boot_loop_clear(void)
+{
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return;
+    uint32_t prev = 0;
+    nvs_get_u32(h, KEY_BOOT_LOOP, &prev);
+    if (prev != 0) {
+        nvs_erase_key(h, KEY_BOOT_LOOP);
+        nvs_commit(h);
+        ESP_LOGI(TAG, "boot stable, cleared boot-loop counter (was %u)",
+                 (unsigned)prev);
+    }
+    nvs_close(h);
+}
+
+bool dd_metrics_in_recovery_mode(void)
+{
+    return dd_metrics_boot_loop_count() >= DD_BOOT_LOOP_RECOVERY_THRESHOLD;
+}
+
 void dd_metrics_set_restart_cause(dd_restart_cause_t c)
 {
     nvs_handle_t h;
@@ -419,6 +465,7 @@ const char *dd_restart_cause_str(dd_restart_cause_t c)
     case DD_RESTART_FACTORY:       return "factory";
     case DD_RESTART_SETUP:         return "setup";
     case DD_RESTART_HEAP_CRITICAL: return "heap_critical";
+    case DD_RESTART_BOOT_LOOP:     return "boot_loop_recovery";
     default:                       return "?";
     }
 }
