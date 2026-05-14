@@ -221,11 +221,28 @@ esp_err_t bonds_revoke_post(httpd_req_t *req)
 
 // ---------- first-run setup + WiFi scan ----------
 
+// /api/setup handles two cases:
+//
+//   1. First run (no admin yet): require admin_password + accept optional
+//      wifi_ssid / wifi_password.
+//   2. Admin exists but device is in NO_WIFI mode (admin set, no WiFi
+//      creds — typically the user's WiFi password changed, or they
+//      moved the device): accept wifi_ssid + wifi_password without
+//      admin_password. Recovery path that lets the user reconfigure
+//      WiFi from SoftAP without losing the admin password.
+//
+// Once admin exists AND wifi creds exist (and we're not in boot-loop
+// recovery), /api/setup is locked out — callers should use the
+// authenticated endpoints from the System tab.
 esp_err_t setup_post(httpd_req_t *req)
 {
-    if (dd_config_has_admin()) {
+    const bool has_admin = dd_config_has_admin();
+    const bool has_wifi  = dd_config_has_wifi();
+
+    if (has_admin && has_wifi && !dd_metrics_in_recovery_mode()) {
         return reply_text(req, "409 Conflict", "already configured");
     }
+
     cJSON *j = recv_json_body(req);
     if (!j) return reply_text(req, "400 Bad Request", "bad json");
 
@@ -233,20 +250,45 @@ esp_err_t setup_post(httpd_req_t *req)
     const cJSON *ssid = cJSON_GetObjectItem(j, "wifi_ssid");
     const cJSON *pass = cJSON_GetObjectItem(j, "wifi_password");
 
-    if (!cJSON_IsString(adm) || strlen(adm->valuestring) < 8) {
+    const bool setting_admin = !has_admin;
+    if (setting_admin) {
+        if (!cJSON_IsString(adm) || strlen(adm->valuestring) < 8) {
+            cJSON_Delete(j);
+            return reply_text(req, "400 Bad Request", "admin_password >= 8 chars");
+        }
+    } else if (cJSON_IsString(adm) && adm->valuestring[0] != '\0') {
+        // Refuse to touch an existing admin password from an unauth
+        // setup call. Use /api/auth/change_password for that.
         cJSON_Delete(j);
-        return reply_text(req, "400 Bad Request", "admin_password >= 8 chars");
+        return reply_text(req, "403 Forbidden",
+            "admin already set; use /api/auth/change_password");
     }
 
-    esp_err_t err = dd_config_set_admin_password(adm->valuestring);
-    if (err != ESP_OK) {
+    const bool setting_wifi = cJSON_IsString(ssid) && ssid->valuestring[0] != '\0';
+    if (!setting_admin && !setting_wifi) {
         cJSON_Delete(j);
-        return reply_text(req, "500 Internal Server Error", "set admin failed");
+        return reply_text(req, "400 Bad Request",
+            "wifi_ssid required for wifi-only setup");
     }
 
-    if (cJSON_IsString(ssid) && strlen(ssid->valuestring) > 0) {
+    if (setting_wifi && strlen(ssid->valuestring) >= DD_WIFI_SSID_MAX) {
+        cJSON_Delete(j);
+        return reply_text(req, "400 Bad Request", "wifi_ssid too long");
+    }
+
+    // Persist in dependency order: admin first, then wifi. If WiFi save
+    // fails we keep the admin password — caller can retry the wifi save
+    // without re-sending admin (hits the wifi-only path next time).
+    if (setting_admin) {
+        esp_err_t err = dd_config_set_admin_password(adm->valuestring);
+        if (err != ESP_OK) {
+            cJSON_Delete(j);
+            return reply_text(req, "500 Internal Server Error", "set admin failed");
+        }
+    }
+    if (setting_wifi) {
         const char *pwstr = cJSON_IsString(pass) ? pass->valuestring : "";
-        err = dd_config_set_wifi(ssid->valuestring, pwstr);
+        esp_err_t err = dd_config_set_wifi(ssid->valuestring, pwstr);
         if (err != ESP_OK) {
             cJSON_Delete(j);
             return reply_text(req, "500 Internal Server Error", "set wifi failed");

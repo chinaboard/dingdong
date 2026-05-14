@@ -266,14 +266,26 @@ const char *dd_boot_mode_str(dd_boot_mode_t m)
 
 esp_err_t dd_config_factory_reset(void)
 {
-    ESP_LOGW(TAG, "factory reset: erasing NVS namespace");
-    nvs_handle_t h;
-    esp_err_t err = nvs_open(NS, NVS_READWRITE, &h);
-    if (err != ESP_OK) return err;
-    err = nvs_erase_all(h);
-    if (err == ESP_OK) err = nvs_commit(h);
-    nvs_close(h);
-    return err;
+    ESP_LOGW(TAG, "factory reset: erasing chassis NVS namespaces");
+    // Wipe every chassis namespace so a forgotten-password reset also
+    // drops LED preference, NTP server choice, BLE presence_timeout,
+    // etc. App-side state (events.jsonl, worker registry) is wiped
+    // separately by the caller (factory_reset_post in dd_http_system).
+    static const char *NAMESPACES[] = {
+        NS, "led", "time", "presence",
+    };
+    esp_err_t last_err = ESP_OK;
+    for (size_t i = 0; i < sizeof(NAMESPACES) / sizeof(NAMESPACES[0]); i++) {
+        nvs_handle_t h;
+        esp_err_t err = nvs_open(NAMESPACES[i], NVS_READWRITE, &h);
+        if (err == ESP_ERR_NVS_NOT_FOUND) continue;
+        if (err != ESP_OK) { last_err = err; continue; }
+        esp_err_t e = nvs_erase_all(h);
+        if (e == ESP_OK) e = nvs_commit(h);
+        nvs_close(h);
+        if (e != ESP_OK) last_err = e;
+    }
+    return last_err;
 }
 
 esp_err_t dd_config_get_device_name(char *out, size_t cap)

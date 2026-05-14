@@ -814,14 +814,20 @@ function recoveryBanner(){
 
 function renderSetup(){
   const m=$('main');
+  // WiFi-only path: admin already exists (typical when user lands here
+  // after their saved WiFi creds stopped working). Don't render the
+  // admin password field and don't include it in the submit body — the
+  // backend rejects /api/setup with admin_password from an unauth call
+  // when admin is already set.
+  const wifiOnly = !!state.status?.has_admin;
   m.innerHTML=`
     ${wizardDeviceBadge()}
     ${recoveryBanner()}
     <div class=ph><h1>${t('setup.title')}</h1><div class=desc>${t('setup.desc')}</div></div>
     <div class=card>
       <form class=form id=setupF>
-        <label>${t('setup.admin')} <span class=mono style='color:var(--t3)'>${t('setup.admin_hint')}</span>
-          <input class=input name=admin_password type=password minlength=8 required></label>
+        ${wifiOnly ? '' : `<label>${t('setup.admin')} <span class=mono style='color:var(--t3)'>${t('setup.admin_hint')}</span>
+          <input class=input name=admin_password type=password minlength=8 required></label>`}
         <label>${t('setup.wifi_ssid')}
           <div class=row style='gap:6px'>
             <input class=input name=wifi_ssid id=ssidInput list=ssidList required style='flex:1'>

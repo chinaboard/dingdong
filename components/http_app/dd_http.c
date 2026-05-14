@@ -41,8 +41,17 @@ static void delayed_restart_task(void *arg)
 
 void schedule_restart(int delay_ms)
 {
-    xTaskCreate(delayed_restart_task, "restart", 2048,
-                (void *)(intptr_t)delay_ms, 5, NULL);
+    BaseType_t rc = xTaskCreate(delayed_restart_task, "restart", 2048,
+                                (void *)(intptr_t)delay_ms, 5, NULL);
+    if (rc != pdPASS) {
+        // Low heap — can't spawn the delayed task. Restart inline so the
+        // caller's "OK, restarting" reply isn't a lie. Tiny delay so the
+        // HTTP response has a chance to flush.
+        ESP_LOGE(TAG, "xTaskCreate(restart) failed (rc=%d) — restarting inline",
+                 (int)rc);
+        vTaskDelay(pdMS_TO_TICKS(200));
+        esp_restart();
+    }
 }
 
 esp_err_t reply_json_status(httpd_req_t *req, const char *status, cJSON *body)
@@ -50,8 +59,19 @@ esp_err_t reply_json_status(httpd_req_t *req, const char *status, cJSON *body)
     httpd_resp_set_status(req, status);
     httpd_resp_set_type(req, "application/json");
     char *s = cJSON_PrintUnformatted(body);
-    esp_err_t r = httpd_resp_send(req, s, HTTPD_RESP_USE_STRLEN);
-    free(s);
+    esp_err_t r;
+    if (s) {
+        r = httpd_resp_send(req, s, HTTPD_RESP_USE_STRLEN);
+        free(s);
+    } else {
+        // Low heap — cJSON couldn't serialize. Don't pass NULL to
+        // httpd_resp_send (crash). Reply with a small error string so
+        // the caller knows it failed instead of getting nothing back.
+        ESP_LOGE(TAG, "reply_json_status: cJSON_PrintUnformatted returned NULL");
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_set_type(req, "text/plain; charset=utf-8");
+        r = httpd_resp_send(req, "oom", HTTPD_RESP_USE_STRLEN);
+    }
     cJSON_Delete(body);
     return r;
 }
