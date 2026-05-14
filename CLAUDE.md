@@ -87,11 +87,25 @@ dd_time_sntp_start  background NTP retries until WiFi up
 ```
 
 After init, `app_main` enters an alive-tick loop (10s) plus three `esp_timer` callbacks set up at the bottom of `app_main`:
-- **OTA validate** (one-shot, 60 s): marks the running OTA image valid so the bootloader stops rolling back. If we panic in the first 60 s, the bootloader reverts. `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y` in sdkconfig.defaults makes this load-bearing.
+- **OTA validate** (one-shot, 60 s): marks the running OTA image valid so the bootloader stops rolling back. If we panic in the first 60 s, the bootloader reverts. `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y` in sdkconfig.defaults makes this load-bearing. Also clears the boot-loop counter (below).
 - **Heap watchdog** (every 10 s): warns at <20 KB free, hard-restarts at <6 KB.
 - **Retention** (daily + once at 60 s): trims `events.jsonl` older than `DD_EVENTS_RETENTION_DAYS` (90). The 512 KB rotation in `dd_storage` is just a safety cap.
 
-A separate FreeRTOS task watches GPIO9 (BOOT button); a 5-second long-press calls `dd_config_factory_reset()` + `dd_storage_event_wipe()` then `esp_restart()`. This is the only physical recovery path.
+These three timers are scheduled BEFORE `dd_ble_start()` / `dd_wifi_start()` / `dd_http_start()` (added in v0.7.16) so a slow or hung subsystem init can't expire the 60 s rollback window or leave the heap watchdog unarmed.
+
+A separate FreeRTOS task watches GPIO9 (BOOT button); a 5-second long-press calls `dd_config_factory_reset()` + `dd_storage_event_wipe()` then `esp_restart()`. Physical recovery path.
+
+## Recovery layers ("unbrickable" guard)
+
+Two layered safety nets keep the device recoverable from any state without USB access. Added in v0.7.14 + v0.7.15 + v0.7.16:
+
+1. **OTA rollback** (ESP-IDF stock): if the new OTA image panics within the 60 s validate window, the bootloader auto-reverts to the previous image. This catches "image immediately crashes" failures.
+
+2. **Boot-loop counter** (`dd_metrics_boot_loop_*`): NVS-persisted counter bumped at every `app_main` entry, cleared by the same 60 s OTA-validate callback. If three consecutive boots bump the counter without ever reaching the healthy mark — panic loops, watchdog resets, hangs that prevent the validate timer from running, brownout cycles — the chassis forces SoftAP recovery mode regardless of saved WiFi creds. Recovery SSID is `dingdong-rec-XXXX` (vs the normal `dingdong-setup-XXXX`) so a phone scan immediately shows the device is in trouble. The Web UI prints a red banner on every page; recovery is just "upload a working .bin via System → Firmware OTA". `DD_BOOT_LOOP_RECOVERY_THRESHOLD = 3`.
+
+3. **WiFi STA giveup → recovery**: 10-minute STA disconnect used to esp_restart and try the same creds again — a 30-minute death spiral if the password was wrong. Now bumps the boot-loop counter past threshold first, so the next reboot lands in SoftAP recovery and the user can fix WiFi creds.
+
+dingdong-fw does NOT have a separate factory partition (crino does) — its 1.4 MB binary doesn't fit alongside two OTA slots and a factory in 4 MB flash. The boot-loop counter handles most failure modes; truly bricked recovery still requires re-flash via USB.
 
 ## Boot modes
 

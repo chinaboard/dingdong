@@ -20,6 +20,12 @@ ESP32-C6 firmware: a BLE-based attendance tracker with an embedded Web UI.
 - **NVS** holds admin password (PBKDF2-SHA256), WiFi creds, worker
   registry, BLE bonds. **LittleFS** holds the append-only `events.jsonl`.
 - **NTP** keeps wall time; pre-sync events backfill from monotonic clock.
+- **Unbrickable recovery.** Three layers keep the device recoverable from
+  any state without USB: ESP-IDF OTA rollback (60 s validate timer),
+  boot-loop counter (3 failed boots → forced SoftAP `dingdong-rec-XXXX`
+  + red recovery banner in Web UI for OTA upload), and STA giveup →
+  recovery (10 min unreachable → next reboot lands in SoftAP). See
+  CLAUDE.md ▸ "Recovery layers" for the full mechanics.
 
 ## Build & flash
 
