@@ -15,7 +15,11 @@
 #include "dd_captive.h"
 #include "mdns.h"
 
-static const char *TAG = "wifi";
+static const char *TAG = "wifi_mgr";  // distinct from IDF's "wifi" TAG so
+                                       // chassis logs (SoftAP up, STA target,
+                                       // mDNS up, etc.) survive the
+                                       // esp_log_level_set("wifi", WARN) we
+                                       // do in main to silence the IDF stack.
 
 // SoftAP SSID is `dingdong-setup-XXXX` where XXXX is the last 2 bytes of the
 // chip's WiFi STA MAC, computed once at start_softap() time. Keeps multiple
