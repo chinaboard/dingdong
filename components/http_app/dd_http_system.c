@@ -51,12 +51,22 @@ static temperature_sensor_handle_t s_tsens = NULL;
 static float chip_temp_c(void)
 {
     if (!s_tsens) {
+        // Use a local handle until BOTH install and enable succeed —
+        // otherwise install-OK + enable-FAIL would leave s_tsens
+        // non-NULL but unusable, and the next call would skip the
+        // install block and call get_celsius on a disabled sensor.
+        temperature_sensor_handle_t h = NULL;
         temperature_sensor_config_t cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
-        if (temperature_sensor_install(&cfg, &s_tsens) != ESP_OK ||
-            temperature_sensor_enable(s_tsens) != ESP_OK) {
-            ESP_LOGW(TAG, "tsens install/enable failed");
+        if (temperature_sensor_install(&cfg, &h) != ESP_OK) {
+            ESP_LOGW(TAG, "tsens install failed");
             return 0.0f;
         }
+        if (temperature_sensor_enable(h) != ESP_OK) {
+            ESP_LOGW(TAG, "tsens enable failed");
+            temperature_sensor_uninstall(h);
+            return 0.0f;
+        }
+        s_tsens = h;
     }
     float t = 0.0f;
     temperature_sensor_get_celsius(s_tsens, &t);
