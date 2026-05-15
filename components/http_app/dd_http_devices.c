@@ -304,6 +304,16 @@ esp_err_t setup_post(httpd_req_t *req)
 
 esp_err_t wifi_scan_get(httpd_req_t *req)
 {
+    // Wizard / recovery / no-wifi modes need this unauthed (the setup
+    // page calls it before the admin even exists). In NORMAL/STA mode
+    // require auth — an open scan endpoint here would let anyone on the
+    // LAN spam scans, which briefly disrupts the device's own STA
+    // association each time.
+    if (dd_config_boot_mode() == DD_BOOT_NORMAL &&
+        !dd_metrics_in_recovery_mode()) {
+        if (require_auth(req) != ESP_OK) return ESP_OK;
+    }
+
     wifi_scan_config_t scan_cfg = { 0 };
     esp_err_t err = esp_wifi_scan_start(&scan_cfg, true);
     if (err != ESP_OK) {
