@@ -34,13 +34,18 @@ static void ota_mark_valid_cb(void *arg)
 {
     const esp_partition_t *p = esp_ota_get_running_partition();
     esp_ota_img_states_t state;
-    if (esp_ota_get_state_partition(p, &state) == ESP_OK &&
-        state == ESP_OTA_IMG_PENDING_VERIFY) {
-        esp_err_t err = esp_ota_mark_app_valid_cancel_rollback();
+    esp_err_t err = esp_ota_get_state_partition(p, &state);
+    if (err == ESP_OK && state == ESP_OTA_IMG_PENDING_VERIFY) {
+        esp_err_t mark = esp_ota_mark_app_valid_cancel_rollback();
         ESP_LOGW(TAG, "OTA: marked image '%s' as valid (was pending): %s",
-                 p->label, esp_err_to_name(err));
-    } else {
+                 p->label, esp_err_to_name(mark));
+    } else if (err == ESP_OK) {
         ESP_LOGI(TAG, "OTA: image '%s' state=%d (no action)", p->label, (int)state);
+    } else {
+        // Factory partition has no otadata state — the call returns an
+        // error and `state` would be uninitialised; skip the value to
+        // avoid logging garbage.
+        ESP_LOGI(TAG, "OTA: image '%s' has no otadata state (no action)", p->label);
     }
     dd_metrics_boot_loop_clear();
 }
