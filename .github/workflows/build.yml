@@ -30,7 +30,7 @@ jobs:
     steps:
       # fetch-depth: 0 so `git describe` inside CMake can see all tags;
       # default shallow clone hides them.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -73,7 +73,7 @@ jobs:
               0x20000  $BD/dingdong.bin
           ls -lh release/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: firmware-${{ matrix.board }}-${{ env.FULL_VER }}
           path: release/
@@ -84,7 +84,7 @@ jobs:
       # jobs upload to the same release — softprops merges asset lists.
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: release/*
           generate_release_notes: true
